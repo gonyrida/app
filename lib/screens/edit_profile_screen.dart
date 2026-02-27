@@ -1,6 +1,9 @@
 // Edit Profile Screen - Allows users to update their profile information
 
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import '../utils/constants.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -17,6 +20,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _phoneController;
   late TextEditingController _bioController;
   bool _isLoading = false;
+  String? _avatarPath;
 
   @override
   void initState() {
@@ -25,7 +29,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameController = TextEditingController(text: 'Chinit Hem');
     _emailController = TextEditingController(text: 'chinithem81@email.com');
     _phoneController = TextEditingController(text: '+855 113 111 61');
-    _bioController = TextEditingController(text: 'Product manager and task enthusiast');
+    _bioController =
+        TextEditingController(text: 'Product manager and task enthusiast');
   }
 
   @override
@@ -43,23 +48,76 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _isLoading = true;
       });
 
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 1));
+      try {
+        // Simulate API call with image upload
+        await Future.delayed(const Duration(seconds: 2));
 
-      if (mounted) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Profile updated successfully'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to update profile: $e'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  /// Pick avatar image from gallery
+  Future<void> _pickAvatar() async {
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 80,
+      );
+
+      if (pickedFile != null) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final savedImage =
+            await File(pickedFile.path).copy('${appDir.path}/$fileName');
+
         setState(() {
-          _isLoading = false;
+          _avatarPath = savedImage.path;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Profile updated successfully'),
+            content: Text('Image uploaded successfully'),
             backgroundColor: AppColors.success,
           ),
         );
-
-        Navigator.pop(context);
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to upload image: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -115,32 +173,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               Center(
                 child: Stack(
                   children: [
-                    CircleAvatar(
-                      radius: 60,
-                      backgroundColor: AppColors.primary.withOpacity(0.1),
-                      child: const Icon(
-                        Icons.person,
-                        size: 60,
-                        color: AppColors.primary,
+                    GestureDetector(
+                      onTap: _pickAvatar,
+                      child: CircleAvatar(
+                        radius: 60,
+                        backgroundColor: AppColors.primary.withOpacity(0.1),
+                        backgroundImage: _avatarPath != null
+                            ? FileImage(File(_avatarPath!)) as ImageProvider
+                            : null,
+                        child: _avatarPath == null
+                            ? const Icon(
+                                Icons.person,
+                                size: 60,
+                                color: AppColors.primary,
+                              )
+                            : null,
                       ),
                     ),
                     Positioned(
                       bottom: 0,
                       right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 2,
+                      child: GestureDetector(
+                        onTap: _pickAvatar,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 2,
+                            ),
                           ),
-                        ),
-                        child: const Icon(
-                          Icons.camera_alt,
-                          size: 20,
-                          color: Colors.white,
+                          child: const Icon(
+                            Icons.camera_alt,
+                            size: 20,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),

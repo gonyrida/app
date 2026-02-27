@@ -6,7 +6,6 @@ import '../core/routes/app_router.dart';
 import '../utils/constants.dart';
 import '../providers/user_session_provider.dart';
 
-
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -29,7 +28,6 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-
   void _login() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
@@ -51,12 +49,25 @@ class _LoginScreenState extends State<LoginScreen> {
         final sessionProvider = context.read<UserSessionProvider>();
 
         if (email.contains('@') && password.length >= 6) {
-          // Save session with email
+          // Extract name from email or create a proper username
+          String userName = 'User';
+          if (email.contains('@')) {
+            final emailPrefix = email.split('@')[0];
+            // Convert email prefix to proper name format
+            userName = emailPrefix
+                .replaceAll(RegExp(r'[._-]'), ' ')
+                .split(' ')
+                .map((word) => word.isNotEmpty
+                    ? word[0].toUpperCase() + word.substring(1).toLowerCase()
+                    : '')
+                .join(' ');
+          }
+
+          // Save session with extracted name
           await sessionProvider.saveSession(
             email: email,
-            name: 'User',
+            name: userName,
           );
-
 
           // Show success message
           ScaffoldMessenger.of(context).showSnackBar(
@@ -147,7 +158,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showSignUpPrompt() {
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -365,9 +375,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           // OR Divider
                           Row(
                             children: [
-                              Expanded(child: Divider(color: Colors.grey.shade300)),
+                              Expanded(
+                                  child: Divider(color: Colors.grey.shade300)),
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
                                 child: Text(
                                   'OR',
                                   style: TextStyle(
@@ -376,7 +388,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
-                              Expanded(child: Divider(color: Colors.grey.shade300)),
+                              Expanded(
+                                  child: Divider(color: Colors.grey.shade300)),
                             ],
                           ),
                           const SizedBox(height: 16),
@@ -415,7 +428,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ],
-
                       ),
                     ),
                   ),

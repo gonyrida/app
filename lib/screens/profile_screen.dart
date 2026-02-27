@@ -666,18 +666,45 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   /// Pick avatar image
   Future<void> _pickAvatar() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 80,
+      );
 
-    if (pickedFile != null) {
-      final appDir = await getApplicationDocumentsDirectory();
-      final fileName = 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final savedImage =
-          await File(pickedFile.path).copy('${appDir.path}/$fileName');
+      if (pickedFile != null) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final savedImage =
+            await File(pickedFile.path).copy('${appDir.path}/$fileName');
 
-      setState(() {
-        _avatarPath = savedImage.path;
-      });
+        setState(() {
+          _avatarPath = savedImage.path;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Image uploaded successfully'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload image: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -685,6 +712,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _saveProfile() async {
     try {
       final isar = await ref.read(databaseProvider.future);
+
+      // Validate email format
+      if (!_emailController.text.contains('@')) {
+        throw Exception('Please enter a valid email address');
+      }
 
       // Create or update user profile
       final user = UserModel()
@@ -694,7 +726,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ..location = _locationController.text.trim()
         ..bio = _bioController.text.trim()
         ..avatarPath = _avatarPath
-        ..updatedAt = DateTime.now();
+        ..updatedAt = DateTime.now()
+        ..themeMode = _darkMode ? 'dark' : 'light'
+        ..notificationsEnabled = _notifications;
 
       // Check if user exists
       final existingUser = await isar.userModels.where().findFirst();
@@ -731,6 +765,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: _saveProfile,
+            ),
           ),
         );
       }
@@ -756,7 +795,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             _phoneController.text = (user.phone?.isNotEmpty ?? false)
                 ? user.phone!
                 : '+855 011 311 161';
-
           }
           // These fields are always loaded from Isar (not in session)
           _locationController.text = (user.location?.isNotEmpty ?? false)

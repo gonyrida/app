@@ -36,7 +36,7 @@ class HomeScreen extends ConsumerWidget {
           slivers: [
             // Header Section
             SliverToBoxAdapter(
-              child: _buildHeader(context, userSession.name),
+              child: _buildHeader(context, userSession),
             ),
 
             // Stats Cards Section
@@ -202,7 +202,7 @@ class HomeScreen extends ConsumerWidget {
   }
 
   /// Build header with greeting and date
-  Widget _buildHeader(BuildContext context, String? userName) {
+  Widget _buildHeader(BuildContext context, UserSessionProvider userSession) {
     final now = DateTime.now();
     final hour = now.hour;
 
@@ -215,8 +215,21 @@ class HomeScreen extends ConsumerWidget {
       greeting = 'Good Evening';
     }
 
-    // Use stored name or default to 'User'
-    final displayName = userName?.isNotEmpty == true ? userName! : 'User';
+    // Use stored name or extract from email, or default to 'User'
+    String displayName = 'User';
+    if (userSession.name?.isNotEmpty == true) {
+      displayName = userSession.name!;
+    } else if (userSession.email?.isNotEmpty == true) {
+      // Extract name from email as fallback
+      final emailPrefix = userSession.email!.split('@')[0];
+      displayName = emailPrefix
+          .replaceAll(RegExp(r'[._-]'), ' ')
+          .split(' ')
+          .map((word) => word.isNotEmpty
+              ? word[0].toUpperCase() + word.substring(1).toLowerCase()
+              : '')
+          .join(' ');
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -255,6 +268,16 @@ class HomeScreen extends ConsumerWidget {
                       color: AppColors.textPrimary,
                     ),
                   ),
+                  if (userSession.phone?.isNotEmpty == true) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      userSession.phone!,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
                 ],
               ),
               Container(
