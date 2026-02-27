@@ -743,6 +743,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         }
       });
 
+      // Update session provider with new profile data
+      final sessionProvider =
+          provider.Provider.of<UserSessionProvider>(context, listen: false);
+      await sessionProvider.updateProfile(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        phone: _phoneController.text.trim(),
+      );
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

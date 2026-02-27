@@ -2,18 +2,23 @@
 
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart' as provider;
 import '../utils/constants.dart';
+import '../providers/user_session_provider.dart';
+import '../core/providers/database_provider.dart';
+import '../features/task_management/domain/models/user_model.dart';
 
-class EditProfileScreen extends StatefulWidget {
+class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
 
   @override
-  State<EditProfileScreen> createState() => _EditProfileScreenState();
+  ConsumerState<EditProfileScreen> createState() => _EditProfileScreenState();
 }
 
-class _EditProfileScreenState extends State<EditProfileScreen> {
+class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _emailController;
@@ -25,10 +30,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize with current user data
-    _nameController = TextEditingController(text: 'Chinit Hem');
-    _emailController = TextEditingController(text: 'chinithem81@email.com');
-    _phoneController = TextEditingController(text: '+855 113 111 61');
+    // Load current user data from session provider
+    final sessionProvider = 
+        provider.Provider.of<UserSessionProvider>(context, listen: false);
+    _nameController = TextEditingController(text: sessionProvider.name ?? 'Chinit Hem');
+    _emailController = TextEditingController(text: sessionProvider.email ?? 'chinithem81@email.com');
+    _phoneController = TextEditingController(text: sessionProvider.phone ?? '+855 113 111 61');
     _bioController =
         TextEditingController(text: 'Product manager and task enthusiast');
   }
@@ -49,8 +56,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       });
 
       try {
-        // Simulate API call with image upload
-        await Future.delayed(const Duration(seconds: 2));
+        // Save to Isar database
+        final isar = await ref.read(databaseProvider.future);
+        
+        final user = UserModel()
+          ..name = _nameController.text.trim()
+          ..email = _emailController.text.trim()
+          ..phone = _phoneController.text.trim()
+          ..bio = _bioController.text.trim()
+          ..avatarPath = _avatarPath
+          ..updatedAt = DateTime.now();
+
+        final existingUser = await isar.userModels.where().findFirst();
+
+        await isar.writeTxn(() async {
+          if (existingUser != null) {
+            user.id = existingUser.id;
+            user.createdAt = existingUser.createdAt;
+            await isar.userModels.put(user);
+          } else {
+            user.createdAt = DateTime.now();
+            await isar.userModels.put(user);
+          }
+        });
+
+        // Update session provider with new profile data
+        final sessionProvider =
+            provider.Provider.of<UserSessionProvider>(context, listen: false);
+        await sessionProvider.updateProfile(
+          name: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          phone: _phoneController.text.trim(),
+        );
 
         if (mounted) {
           setState(() {
