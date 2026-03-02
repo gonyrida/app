@@ -5,6 +5,8 @@ import '../core/routes/app_router.dart';
 import '../core/services/supabase_service.dart';
 import '../utils/constants.dart';
 import '../providers/user_session_provider.dart';
+import '../providers/supabase_user_provider.dart';
+import '../features/task_management/domain/models/user_model.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -79,6 +81,23 @@ class _SignUpScreenState extends State<SignUpScreen> {
         if (response.user != null) {
           // Record successful signup attempt
           _lastSignupAttempt = DateTime.now();
+
+          // Create user profile in database
+          try {
+            final userService = context.read<SupabaseUserService>();
+            final userModel = UserModel()
+              ..id = response.user!.id
+              ..email = _emailController.text.trim()
+              ..name = _nameController.text.trim()
+              ..phone = _phoneController.text.trim()
+              ..createdAt = DateTime.now()
+              ..updatedAt = DateTime.now();
+
+            await userService.saveUserProfile(userModel);
+          } catch (profileError) {
+            print('Profile creation error: $profileError');
+            // Continue even if profile creation fails - trigger should handle it
+          }
 
           // Save user session with all signup data
           final sessionProvider = context.read<UserSessionProvider>();
