@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 import '../core/theme/app_theme.dart';
-import '../features/task_management/application/task_providers.dart';
+import '../features/task_management/application/supabase_task_providers.dart';
 import '../features/task_management/domain/models/task_model.dart';
 import '../features/task_management/presentation/widgets/priority_chip.dart';
 
@@ -39,7 +39,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allTasksAsync = ref.watch(allTasksProvider);
+    final allTasksAsync = ref.watch(supabaseAllTasksProvider);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -302,9 +302,15 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
   /// Get tasks for a specific day
   List<TaskModel> _getTasksForDay(List<TaskModel> tasks, DateTime? day) {
     if (day == null) return [];
+    
     return tasks.where((task) {
-      if (task.dueDate == null) return false;
-      return isSameDay(task.dueDate, day);
+      // Include tasks due on this specific day OR created on this day (for tasks without due dates)
+      if (task.dueDate != null) {
+        return isSameDay(task.dueDate!, day);
+      } else {
+        // For tasks without due dates, check if they were created on this day
+        return isSameDay(task.createdAt, day);
+      }
     }).toList();
   }
 

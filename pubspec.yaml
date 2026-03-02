@@ -16,7 +16,11 @@ dependencies:
   riverpod_annotation: ^2.3.3
   hooks_riverpod: ^2.4.9
   
-  # Local Database - Isar 3.x
+  # Backend Database - Supabase
+  supabase_flutter: ^2.12.0
+  supabase_auth_ui: ^0.5.5
+  
+  # Local Database - Isar 3.x (keeping for offline fallback)
   isar: ^3.1.0+1
   isar_flutter_libs: ^3.1.0+1
   
@@ -41,11 +45,12 @@ dependencies:
   
   # Google Sign In
   google_sign_in: ^6.2.1
+  
+  # Environment Configuration
+  flutter_dotenv: ^5.1.0
 
 
 dev_dependencies:
-
-
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
@@ -54,11 +59,13 @@ dev_dependencies:
   isar_generator: ^3.1.0+1
   build_runner: ^2.4.8
   riverpod_generator: ^2.3.9
-
-
+  
+  # Build configuration for path aliases
+  build_config: ^1.1.2
 
 flutter:
   uses-material-design: true
   
   assets:
     - assets/images/
+    - .env

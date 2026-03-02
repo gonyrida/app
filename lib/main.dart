@@ -2,13 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:provider/provider.dart' as provider;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'core/config/environment_config.dart';
 import 'core/routes/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/services/supabase_service.dart';
 import 'providers/user_session_provider.dart';
 import 'providers/theme_provider.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Load environment variables and initialize Supabase
+  try {
+    await EnvironmentConfig.load();
+    await SupabaseService.instance.initialize();
+  } catch (e) {
+    print('Failed to initialize services: $e');
+  }
 
   runApp(
     provider.MultiProvider(
