@@ -5,8 +5,8 @@ echo ==========================================
 echo.
 
 :: Set paths
-set FLUTTER_PATH=C:\development\flutter\bin\flutter.bat
-set ANDROID_SDK=C:\Android\Sdk
+set FLUTTER_PATH=D:\App\Task_Management\flutter\bin\flutter.bat
+set ANDROID_SDK=C:\Users\CPM-26\AppData\Local\Android\Sdk
 set ADB_PATH=%ANDROID_SDK%\platform-tools\adb.exe
 set EMULATOR_PATH=%ANDROID_SDK%\emulator\emulator.exe
 
@@ -14,14 +14,14 @@ echo [INFO] Checking prerequisites...
 
 :: Check if Flutter exists
 if not exist "%FLUTTER_PATH%" (
-    echo [ERROR] Flutter not found at C:\development\flutter
+    echo [ERROR] Flutter not found in PATH
     pause
     exit /b 1
 )
 
 :: Check if Android SDK exists
 if not exist "%ANDROID_SDK%" (
-    echo [ERROR] Android SDK not found at C:\Android\Sdk
+    echo [ERROR] Android SDK not found at C:\Users\CPM-26\AppData\Local\Android\Sdk
     pause
     exit /b 1
 )
