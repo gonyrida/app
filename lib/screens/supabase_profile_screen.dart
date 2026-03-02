@@ -4,7 +4,8 @@ import 'package:provider/provider.dart' as provider;
 import 'package:go_router/go_router.dart';
 import '../providers/supabase_user_provider.dart';
 import '../features/task_management/application/supabase_task_providers.dart';
-import '../features/task_management/application/task_providers.dart';
+import '../features/task_management/application/task_providers.dart'
+    as task_providers;
 import '../features/task_management/domain/models/task_model.dart';
 import '../core/services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -163,7 +164,7 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final taskStatsAsync = ref.watch(supabaseTaskStatsProvider);
+    final taskStatsAsync = ref.watch(task_providers.taskStatsProvider);
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
@@ -238,15 +239,7 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
 
             // Task Statistics
             taskStatsAsync.when(
-              data: (statsMap) {
-                // Convert Map to TaskStats
-                final stats = TaskStats(
-                  total: statsMap['total'] ?? 0,
-                  completed: statsMap['completed'] ?? 0,
-                  pending: statsMap['pending'] ?? 0,
-                  highPriority: statsMap['high_priority'] ?? 0,
-                );
-
+              data: (stats) {
                 return Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),

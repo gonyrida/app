@@ -9,6 +9,7 @@ class TaskCard extends StatelessWidget {
   final TaskModel task;
   final VoidCallback? onToggle;
   final VoidCallback? onTap;
+  final VoidCallback? onDelete;
   final bool showImage;
 
   const TaskCard({
@@ -16,6 +17,7 @@ class TaskCard extends StatelessWidget {
     required this.task,
     this.onToggle,
     this.onTap,
+    this.onDelete,
     this.showImage = true,
   });
 
@@ -133,6 +135,24 @@ class TaskCard extends StatelessWidget {
                           compact: true,
                           showLabel: false,
                         ),
+                        const Spacer(),
+                        // Delete button
+                        if (onDelete != null)
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: onDelete,
+                              borderRadius: BorderRadius.circular(6),
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                child: Icon(
+                                  Icons.delete_outline,
+                                  size: 18,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 8),

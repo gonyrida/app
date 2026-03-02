@@ -609,19 +609,30 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
   /// Pick image
   Future<void> _pickImage() async {
+    print('DEBUG: Starting image pick...');
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
     if (pickedFile != null) {
+      print('DEBUG: Image picked from gallery: ${pickedFile.path}');
+
       // Copy to app directory
       final appDir = await getApplicationDocumentsDirectory();
       final fileName = 'task_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final savedImage =
           await File(pickedFile.path).copy('${appDir.path}/$fileName');
 
+      print('DEBUG: Image copied to: ${savedImage.path}');
+      print('DEBUG: File exists: ${savedImage.existsSync()}');
+      print('DEBUG: File size: ${savedImage.lengthSync()} bytes');
+
       setState(() {
         _imagePath = savedImage.path;
       });
+
+      print('DEBUG: _imagePath set to: $_imagePath');
+    } else {
+      print('DEBUG: No image selected');
     }
   }
 
@@ -682,6 +693,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       print('  Title: ${_titleController.text.trim()}');
       print('  Category: $_selectedCategory');
       print('  Priority: $_selectedPriority');
+      print('  Image path: $_imagePath');
+      print('  Image path is null: ${_imagePath == null}');
+      print('  Image path is empty: ${_imagePath?.isEmpty ?? true}');
 
       // Get current user ID
       final sessionProvider =

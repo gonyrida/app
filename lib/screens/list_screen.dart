@@ -4,10 +4,14 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/theme/app_theme.dart';
-import '../features/task_management/application/task_providers.dart';
+import '../features/task_management/application/task_providers.dart'
+    as task_providers;
 import '../features/task_management/domain/models/task_model.dart';
 import '../features/task_management/presentation/widgets/task_card.dart';
 import '../widgets/search_bar.dart' as app_search;
+
+// Import TaskFilter and other needed types
+import '../features/task_management/application/task_providers.dart';
 
 // Providers for search and filter state
 final selectedFilterProvider =
@@ -152,7 +156,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
 
   /// Build task list for a specific filter
   Widget _buildTaskList(TaskFilter filter, String searchQuery) {
-    final tasksAsync = ref.watch(filteredTasksProvider(
+    final tasksAsync = ref.watch(task_providers.filteredTasksProvider(
       filter: filter,
       searchQuery: searchQuery,
     ));
@@ -176,6 +180,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
                 onTap: () {
                   context.push('/task-detail/${task.id}', extra: task);
                 },
+                onDelete: () => _showDeleteConfirmation(context, task),
               ),
             );
           },
@@ -195,7 +200,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
 
   /// Toggle task completion
   Future<void> _toggleTask(TaskModel task) async {
-    final taskService = ref.read(taskServiceProvider);
+    final taskService = ref.read(task_providers.taskServiceProvider);
     final success = await taskService.toggleTaskCompletion(task.id);
 
     if (success && mounted) {
@@ -211,7 +216,9 @@ class _ListScreenState extends ConsumerState<ListScreen>
             label: 'UNDO',
             textColor: Colors.white,
             onPressed: () async {
-              await ref.read(taskServiceProvider).toggleTaskCompletion(task.id);
+              await ref
+                  .read(task_providers.taskServiceProvider)
+                  .toggleTaskCompletion(task.id);
             },
           ),
         ),
@@ -238,7 +245,6 @@ class _ListScreenState extends ConsumerState<ListScreen>
           icon = Icons.task_alt;
           break;
         case TaskFilter.all:
-        default:
           message = 'No tasks yet.\nAdd your first task to get started!';
           icon = Icons.add_task;
           break;
@@ -319,7 +325,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
             const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: () {
-                ref.invalidate(filteredTasksProvider);
+                ref.invalidate(task_providers.filteredTasksProvider);
               },
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
@@ -386,6 +392,58 @@ class _ListScreenState extends ConsumerState<ListScreen>
           ),
         ),
       ),
+    );
+  }
+
+  /// Show delete confirmation dialog
+  void _showDeleteConfirmation(BuildContext context, TaskModel task) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Task'),
+          content: Text('Are you sure you want to delete "${task.title}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                try {
+                  final taskService =
+                      ref.read(task_providers.taskServiceProvider);
+                  await taskService.deleteTask(task.id);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Task "${task.title}" deleted'),
+                      duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error deleting task: $e'),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 3),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
     );
   }
 }

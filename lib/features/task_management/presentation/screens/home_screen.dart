@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,11 +5,8 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/services/supabase_service.dart';
 import '../../application/task_providers.dart' as task_providers;
-import '../../application/supabase_task_providers.dart' as supabase_providers;
+import '../../domain/models/task_model.dart';
 import '../widgets/task_card.dart';
-
-// Import TaskStats from task_providers
-import '../../application/task_providers.dart';
 
 /// HomeScreen - Dashboard with greeting, stats, and today's tasks
 ///
@@ -40,44 +36,51 @@ class HomeScreen extends ConsumerWidget {
     return formatter.format(now);
   }
 
-  /// Convert Map<String, int> to TaskStats object
-  TaskStats _convertMapToTaskStats(Map<String, int> statsMap) {
-    return TaskStats(
-      total: statsMap['total'] ?? 0,
-      completed: statsMap['completed'] ?? 0,
-      pending: statsMap['pending'] ?? 0,
-      highPriority: statsMap['high_priority'] ?? 0,
-    );
+  /// Get the current user's display name
+  String _getUserName() {
+    final supabase = SupabaseService.instance;
+    final user = supabase.currentUser;
+
+    if (user != null) {
+      // Check if user has a display name in metadata
+      final displayName = user.userMetadata?['display_name'] ??
+          user.userMetadata?['name'] ??
+          user.userMetadata?['full_name'];
+
+      if (displayName != null && displayName.toString().isNotEmpty) {
+        return displayName.toString();
+      }
+
+      // Fallback to email-based name if no metadata name exists
+      if (user.email != null) {
+        final email = user.email!;
+        final parts = email.split('@');
+        final namePart = parts[0];
+
+        // Convert email username to display name (capitalize first letter)
+        if (namePart.contains('.') || namePart.contains('_')) {
+          final nameParts = namePart.split(RegExp(r'[._]'));
+          return nameParts
+              .map((part) => part.isNotEmpty
+                  ? part[0].toUpperCase() + part.substring(1)
+                  : '')
+              .join(' ');
+        } else {
+          return namePart.isNotEmpty
+              ? namePart[0].toUpperCase() + namePart.substring(1)
+              : email;
+        }
+      }
+    }
+
+    return 'User'; // Fallback
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final todayTasksAsync = ref.watch(task_providers.todaysTasksProvider);
-    final statsAsync = ref.watch(supabase_providers.supabaseTaskStatsProvider);
+    final statsAsync = ref.watch(task_providers.taskStatsProvider);
     final taskService = ref.read(task_providers.taskServiceProvider);
-
-    // Debug: Add logging to check authentication state
-    final currentUserId = SupabaseService.instance.currentUserId;
-    final isAuthenticated = SupabaseService.instance.isAuthenticated;
-
-    // Force refresh stats if they seem to be missing
-    if (statsAsync.hasValue &&
-        (statsAsync.value?['total'] ?? 0) == 0 &&
-        currentUserId != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.invalidate(supabase_providers.supabaseTaskStatsProvider);
-      });
-    }
-
-    if (kDebugMode) {
-      print('DEBUG HomeScreen: User ID: $currentUserId');
-      print('DEBUG HomeScreen: Is Authenticated: $isAuthenticated');
-      print('DEBUG HomeScreen: Stats state: ${statsAsync.value}');
-      print('DEBUG HomeScreen: Stats loading: ${statsAsync.isLoading}');
-      print('DEBUG HomeScreen: Stats error: ${statsAsync.error}');
-      print(
-          'DEBUG HomeScreen: Today tasks state: ${todayTasksAsync.value?.length} tasks');
-    }
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -112,9 +115,9 @@ class HomeScreen extends ConsumerWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          "John Doe", // TODO: Get from user provider
-                          style: TextStyle(
+                        Text(
+                          _getUserName(),
+                          style: const TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
                             color: AppColors.textPrimary,
@@ -141,62 +144,6 @@ class HomeScreen extends ConsumerWidget {
                         color: Colors.grey[600],
                       ),
                     ),
-                    // Debug info
-                    if (kDebugMode) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: isAuthenticated
-                              ? Colors.green.withOpacity(0.1)
-                              : Colors.red.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: isAuthenticated ? Colors.green : Colors.red,
-                            width: 1,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Debug Info:',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color:
-                                    isAuthenticated ? Colors.green : Colors.red,
-                              ),
-                            ),
-                            Text(
-                              'User ID: ${currentUserId ?? "Not logged in"}',
-                              style: const TextStyle(
-                                  fontSize: 10, color: Colors.black87),
-                            ),
-                            Text(
-                              'Auth Status: ${isAuthenticated ? "Authenticated" : "Not Authenticated"}',
-                              style: const TextStyle(
-                                  fontSize: 10, color: Colors.black87),
-                            ),
-                            Text(
-                              'Stats: ${statsAsync.value?['total'] ?? 0} total, ${statsAsync.value?['completed'] ?? 0} completed, ${statsAsync.value?['pending'] ?? 0} pending',
-                              style: const TextStyle(
-                                  fontSize: 10, color: Colors.black87),
-                            ),
-                            Text(
-                              'Stats Async State: ${statsAsync.isLoading ? "Loading" : statsAsync.hasError ? "Error: ${statsAsync.error}" : "Data"}',
-                              style: const TextStyle(
-                                  fontSize: 10, color: Colors.black87),
-                            ),
-                            Text(
-                              'Today Tasks: ${todayTasksAsync.value?.length ?? 0} tasks',
-                              style: const TextStyle(
-                                  fontSize: 10, color: Colors.black87),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -205,12 +152,7 @@ class HomeScreen extends ConsumerWidget {
             // Stats Cards
             SliverToBoxAdapter(
               child: statsAsync.when(
-                data: (statsMap) {
-                  final stats = _convertMapToTaskStats(statsMap);
-                  if (kDebugMode) {
-                    print(
-                        'DEBUG HomeScreen: Stats data received - Total: ${stats.total}, Completed: ${stats.completed}, Pending: ${stats.pending}');
-                  }
+                data: (stats) {
                   return Container(
                     margin: const EdgeInsets.all(16),
                     padding: const EdgeInsets.all(16),
@@ -248,9 +190,6 @@ class HomeScreen extends ConsumerWidget {
                   );
                 },
                 loading: () {
-                  if (kDebugMode) {
-                    print('DEBUG HomeScreen: Stats loading...');
-                  }
                   return Container(
                     margin: const EdgeInsets.all(16),
                     padding: const EdgeInsets.all(16),
@@ -265,9 +204,6 @@ class HomeScreen extends ConsumerWidget {
                   );
                 },
                 error: (error, stack) {
-                  if (kDebugMode) {
-                    print('DEBUG HomeScreen: Stats error: $error');
-                  }
                   return const SizedBox.shrink();
                 },
               ),
@@ -362,6 +298,9 @@ class HomeScreen extends ConsumerWidget {
                               ),
                             );
                           },
+                          onDelete: () {
+                            _showDeleteConfirmation(context, task, taskService);
+                          },
                         );
                       },
                       childCount: tasks.length,
@@ -429,6 +368,57 @@ class HomeScreen extends ConsumerWidget {
       height: 50,
       width: 1,
       color: Colors.white24,
+    );
+  }
+
+  /// Show delete confirmation dialog
+  void _showDeleteConfirmation(
+      BuildContext context, TaskModel task, dynamic taskService) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Task'),
+          content: Text('Are you sure you want to delete "${task.title}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                try {
+                  await taskService.deleteTask(task.id);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Task "${task.title}" deleted'),
+                      duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error deleting task: $e'),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 3),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
     );
   }
 }

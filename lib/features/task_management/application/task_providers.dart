@@ -203,41 +203,18 @@ Future<TaskStats> taskStats(TaskStatsRef ref) async {
   }
 
   try {
-    // Get all tasks and calculate stats locally instead of using database view
-    final allTasks = await repository.getAllTasks();
-
-    // Double-filter tasks by user ID for additional security
-    final userTasks =
-        allTasks.where((task) => task.userId == currentUserId).toList();
+    // Use the repository's getTaskStats method for consistency
+    final statsMap = await repository.getTaskStats();
 
     if (kDebugMode) {
-      print(
-          'DEBUG: Calculating stats from ${userTasks.length} tasks for user $currentUserId');
-    }
-
-    final total = userTasks.length;
-    final completed = userTasks.where((task) => task.isCompleted).length;
-    final pending = userTasks.where((task) => !task.isCompleted).length;
-    final highPriority = userTasks
-        .where((task) => task.priority == Priority.high && !task.isCompleted)
-        .length;
-
-    final stats = {
-      'total': total,
-      'completed': completed,
-      'pending': pending,
-      'high_priority': highPriority,
-    };
-
-    if (kDebugMode) {
-      print('DEBUG: Task stats calculated: $stats');
+      print('DEBUG: Task stats from repository: $statsMap');
     }
 
     return TaskStats(
-      total: stats['total'] ?? 0,
-      completed: stats['completed'] ?? 0,
-      pending: stats['pending'] ?? 0,
-      highPriority: stats['high_priority'] ?? 0,
+      total: statsMap['total'] ?? 0,
+      completed: statsMap['completed'] ?? 0,
+      pending: statsMap['pending'] ?? 0,
+      highPriority: statsMap['high_priority'] ?? 0,
     );
   } catch (e) {
     if (kDebugMode) {

@@ -14,11 +14,8 @@ class SupabaseUserRepository {
       final userId = SupabaseService.instance.currentUserId;
       if (userId == null) return null;
 
-      final response = await _client
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .single();
+      final response =
+          await _client.from('profiles').select().eq('id', userId).single();
 
       if (response == null) return null;
 
@@ -34,11 +31,8 @@ class SupabaseUserRepository {
   /// Create or update user profile
   Future<SupabaseUserModel> saveUserProfile(SupabaseUserModel user) async {
     try {
-      final response = await _client
-          .from('profiles')
-          .upsert(user.toMap())
-          .select()
-          .single();
+      final response =
+          await _client.from('profiles').upsert(user.toMap()).select().single();
 
       if (kDebugMode) {
         print('User profile saved successfully');
@@ -74,7 +68,8 @@ class SupabaseUserRepository {
       if (bio != null) updateData['bio'] = bio;
       if (avatarUrl != null) updateData['avatar_url'] = avatarUrl;
       if (themeMode != null) updateData['theme_mode'] = themeMode;
-      if (notificationsEnabled != null) updateData['notifications_enabled'] = notificationsEnabled;
+      if (notificationsEnabled != null)
+        updateData['notifications_enabled'] = notificationsEnabled;
 
       final response = await _client
           .from('profiles')
@@ -102,14 +97,15 @@ class SupabaseUserRepository {
       final userId = SupabaseService.instance.currentUserId;
       if (userId == null) throw Exception('User not authenticated');
 
-      final fileBytes = await _client.storage.from('avatars').download(filePath);
-      
+      final fileBytes =
+          await _client.storage.from('avatars').download(filePath);
+
       final path = 'users/$userId/avatars/$fileName';
       await _client.storage.from('avatars').upload(
-        path,
-        fileBytes,
-        fileOptions: const FileOptions(upsert: true),
-      );
+            path,
+            fileBytes,
+            fileOptions: const FileOptions(upsert: true),
+          );
 
       final publicUrl = _client.storage.from('avatars').getPublicUrl(path);
 
@@ -136,7 +132,9 @@ class SupabaseUserRepository {
       final uri = Uri.parse(avatarUrl);
       final path = uri.pathSegments.last;
 
-      await _client.storage.from('avatars').remove(['users/$userId/avatars/$path']);
+      await _client.storage
+          .from('avatars')
+          .remove(['users/$userId/avatars/$path']);
 
       if (kDebugMode) {
         print('Avatar deleted successfully');
@@ -177,7 +175,8 @@ class SupabaseUserRepository {
         .from('profiles')
         .stream(primaryKey: ['id'])
         .eq('id', userId)
-        .map((data) => data.isNotEmpty ? SupabaseUserModel.fromMap(data.first) : null);
+        .map((data) =>
+            data.isNotEmpty ? SupabaseUserModel.fromMap(data.first) : null);
   }
 
   /// Check if user profile exists
@@ -186,11 +185,8 @@ class SupabaseUserRepository {
       final userId = SupabaseService.instance.currentUserId;
       if (userId == null) return false;
 
-      final count = await _client
-          .from('profiles')
-          .select('id')
-          .eq('id', userId)
-          .count();
+      final count =
+          await _client.from('profiles').select('id').eq('id', userId).count();
 
       return count > 0;
     } catch (e) {

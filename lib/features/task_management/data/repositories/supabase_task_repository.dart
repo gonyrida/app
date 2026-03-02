@@ -300,29 +300,38 @@ class SupabaseTaskRepository {
         throw Exception('User not authenticated');
       }
 
-      final response = await _client
-          .from('task_stats')
-          .select()
-          .eq('user_id', userId)
-          .maybeSingle();
+      // Get all tasks for the user and calculate stats
+      final response =
+          await _client.from(_tableName).select().eq('user_id', userId);
 
-      if (response == null) {
-        return {
-          'total': 0,
-          'completed': 0,
-          'pending': 0,
-          'high_priority': 0,
-          'overdue': 0,
-        };
-      }
+      final tasks = (response as List<dynamic>)
+          .map((json) => TaskModel.fromSupabase(json as Map<String, dynamic>))
+          .toList();
 
-      return {
-        'total': response['total'] as int? ?? 0,
-        'completed': response['completed'] as int? ?? 0,
-        'pending': response['pending'] as int? ?? 0,
-        'high_priority': response['high_priority'] as int? ?? 0,
-        'overdue': response['overdue'] as int? ?? 0,
+      final total = tasks.length;
+      final completed = tasks.where((task) => task.isCompleted).length;
+      final pending = tasks.where((task) => !task.isCompleted).length;
+      final highPriority =
+          tasks.where((task) => task.priority.name == 'high').length;
+
+      // Calculate overdue tasks (tasks past due date that are not completed)
+      final now = DateTime.now();
+      final overdue = tasks
+          .where((task) =>
+              !task.isCompleted &&
+              task.dueDate != null &&
+              task.dueDate!.isBefore(now))
+          .length;
+
+      final stats = {
+        'total': total,
+        'completed': completed,
+        'pending': pending,
+        'high_priority': highPriority,
+        'overdue': overdue,
       };
+
+      return stats;
     } catch (e) {
       throw Exception('Failed to fetch task stats: $e');
     }
