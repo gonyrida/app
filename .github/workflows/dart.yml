@@ -21,7 +21,7 @@ jobs:
       # Setup Flutter SDK
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.0' # Use specific Flutter version
+          flutter-version: '3.22.0' # Use Flutter version compatible with Dart 3.6+
           channel: 'stable'
 
       - name: Install dependencies
