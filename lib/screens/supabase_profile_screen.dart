@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:provider/provider.dart' as provider;
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../providers/supabase_user_provider.dart';
 import '../features/task_management/application/supabase_task_providers.dart';
 import '../features/task_management/application/task_providers.dart'
@@ -98,8 +99,18 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
+    print(' === PROFILE UPDATE START ===');
+    print('Name: "${_nameController.text.trim()}"');
+    print('Phone: "${_phoneController.text.trim()}"');
+    print('Location: "${_locationController.text.trim()}"');
+    print('Bio: "${_bioController.text.trim()}"');
+    print('Avatar URL: "$_avatarUrl"');
+    print('Theme Mode: ${_darkMode ? "dark" : "light"}');
+    print('Notifications: $_notifications');
+
     try {
       final userService = ref.read(supabaseUserServiceProvider);
+      print(' UserService obtained, calling updateUserProfile...');
 
       await userService.updateUserProfile(
         name: _nameController.text.trim(),
@@ -116,6 +127,8 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
         themeMode: _darkMode ? 'dark' : 'light',
         notificationsEnabled: _notifications,
       );
+
+      print(' Profile update completed successfully!');
 
       if (mounted) {
         setState(() {
@@ -137,6 +150,51 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to update profile: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickAvatar() async {
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+
+      if (pickedFile != null) {
+        final userService = ref.read(supabaseUserServiceProvider);
+
+        // Upload avatar to Supabase Storage
+        final avatarUrl = await userService.uploadAvatar(
+          pickedFile.path,
+          'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+
+        // Update avatar URL in state
+        setState(() {
+          _avatarUrl = avatarUrl;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Avatar uploaded successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload avatar: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -198,25 +256,27 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
             Center(
               child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 60,
-                    backgroundColor: Colors.blue.shade100,
-                    backgroundImage:
-                        _avatarUrl != null && _avatarUrl!.isNotEmpty
-                            ? NetworkImage(
-                                _avatarUrl!,
-                                headers: {'Cache-Control': 'no-cache'},
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Icon(Icons.person,
-                                      size: 60, color: Colors.blue.shade600);
-                                },
-                              )
-                            : null,
-                    child: (_avatarUrl == null || _avatarUrl!.isEmpty)
-                        ? Icon(Icons.person,
-                            size: 60, color: Colors.blue.shade600)
-                        : null,
-                    key: ValueKey('avatar_${_avatarUrl ?? 'default'}'),
+                  GestureDetector(
+                    onTap: _isEditing ? _pickAvatar : null,
+                    child: CircleAvatar(
+                      radius: 60,
+                      backgroundColor: Colors.blue.shade100,
+                      backgroundImage:
+                          _avatarUrl != null && _avatarUrl!.isNotEmpty
+                              ? NetworkImage(
+                                  _avatarUrl!,
+                                  headers: {'Cache-Control': 'no-cache'},
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Icon(Icons.person,
+                                        size: 60, color: Colors.blue.shade600);
+                                  },
+                                )
+                              : null,
+                      child: (_avatarUrl == null || _avatarUrl!.isEmpty)
+                          ? Icon(Icons.person,
+                              size: 60, color: Colors.blue.shade600)
+                          : null,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Text(

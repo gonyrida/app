@@ -12,16 +12,19 @@ SELECT * FROM pg_proc WHERE proname = 'handle_new_user';
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user();
 
--- 3. Recreate the function with phone support
+-- 3. Recreate the function with location support and proper null handling
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, name, phone)
+  INSERT INTO public.profiles (id, email, name, phone, location, bio, avatar_url)
   VALUES (
     new.id, 
     new.email, 
     COALESCE(new.raw_user_meta_data->>'name', 'User'),
-    COALESCE(new.raw_user_meta_data->>'phone', '')
+    COALESCE(new.raw_user_meta_data->>'phone', NULL),
+    COALESCE(new.raw_user_meta_data->>'location', NULL),
+    COALESCE(new.raw_user_meta_data->>'bio', NULL),
+    COALESCE(new.raw_user_meta_data->>'avatar_url', NULL)
   );
   RETURN new;
 END;
@@ -56,12 +59,15 @@ ORDER BY au.created_at DESC;
 -- 8. Optional: Create profiles for existing users who don't have them
 -- Uncomment this section if you want to fix existing users
 /*
-INSERT INTO public.profiles (id, email, name, phone)
+INSERT INTO public.profiles (id, email, name, phone, location, bio, avatar_url)
 SELECT 
   au.id,
   au.email,
   COALESCE(au.raw_user_meta_data->>'name', 'User'),
-  COALESCE(au.raw_user_meta_data->>'phone', '')
+  COALESCE(au.raw_user_meta_data->>'phone', NULL),
+  COALESCE(au.raw_user_meta_data->>'location', NULL),
+  COALESCE(au.raw_user_meta_data->>'bio', NULL),
+  COALESCE(au.raw_user_meta_data->>'avatar_url', NULL)
 FROM auth.users au
 LEFT JOIN public.profiles p ON au.id = p.id
 WHERE au.email_confirmed_at IS NOT NULL 

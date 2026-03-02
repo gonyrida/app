@@ -13,6 +13,8 @@ import '../features/task_management/application/supabase_task_providers.dart'
     as supabase_providers;
 import '../features/task_management/application/task_providers.dart';
 import '../providers/user_session_provider.dart';
+import '../providers/supabase_user_provider.dart';
+import '../data/repositories/supabase_user_repository.dart';
 
 /// ProfileScreen - User profile with editable info
 ///
@@ -731,6 +733,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   /// Save profile to SharedPreferences
   Future<void> _saveProfile() async {
+    print('🔥 === OLD PROFILE SCREEN: _saveProfile START ===');
+    print('🔥 Name: "${_nameController.text.trim()}"');
+    print('🔥 Email: "${_emailController.text.trim()}"');
+    print('🔥 Phone: "${_phoneController.text.trim()}"');
+    print('🔥 Location: "${_locationController.text.trim()}"');
+    print('🔥 Bio: "${_bioController.text.trim()}"');
+    print('🔥 Avatar: "$_avatarPath"');
+    print('🔥 Dark Mode: $_darkMode');
+    print('🔥 Notifications: $_notifications');
+
     try {
       // Validate email format
       if (!_emailController.text.contains('@')) {
@@ -738,6 +750,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
 
       final prefs = await SharedPreferences.getInstance();
+      print('🔥 Saving to SharedPreferences...');
 
       // Save profile data
       await prefs.setString('profile_name', _nameController.text.trim());
@@ -751,6 +764,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
       await prefs.setBool('profile_dark_mode', _darkMode);
       await prefs.setBool('profile_notifications', _notifications);
+
+      print('🔥 SharedPreferences saved, calling Supabase update...');
+
+      // Also update Supabase database
+      try {
+        final supabaseUserService =
+            SupabaseUserService(SupabaseUserRepository());
+        print('🔥 Calling Supabase update with location and bio...');
+
+        await supabaseUserService.updateUserProfile(
+          name: _nameController.text.trim(),
+          phone: _phoneController.text.trim(),
+          location: _locationController.text.trim().isEmpty
+              ? null
+              : _locationController.text.trim(),
+          bio: _bioController.text.trim().isEmpty
+              ? null
+              : _bioController.text.trim(),
+          avatarUrl: _avatarPath,
+          themeMode: _darkMode ? 'dark' : 'light',
+          notificationsEnabled: _notifications,
+        );
+        print('🔥 Supabase update completed!');
+      } catch (supabaseError) {
+        print('🔥 Supabase update failed: $supabaseError');
+        // Continue even if Supabase fails - SharedPreferences saved
+      }
 
       // Update session provider with new profile data
       final sessionProvider =

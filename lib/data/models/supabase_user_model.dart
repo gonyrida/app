@@ -1,6 +1,6 @@
 /// Supabase User Profile Model
 /// Matches the profiles table schema in Supabase
-part 'supabase_user_model.g.dart';
+import '../../features/task_management/domain/models/user_model.dart';
 
 class SupabaseUserModel {
   final String id;
@@ -91,7 +91,7 @@ class SupabaseUserModel {
   /// Convert to local UserModel for compatibility
   UserModel toLocalModel() {
     return UserModel()
-      ..id = int.tryParse(id) ?? 0
+      ..id = id
       ..name = name
       ..email = email
       ..phone = phone

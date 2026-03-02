@@ -34,6 +34,7 @@ class UserSessionProvider extends ChangeNotifier {
     await prefs.remove('user_email');
     await prefs.remove('user_name');
     await prefs.remove('user_phone');
+    await prefs.remove('user_location');
     await prefs.remove('is_logged_in');
   }
 
@@ -42,6 +43,7 @@ class UserSessionProvider extends ChangeNotifier {
     required String email,
     String? name,
     String? phone,
+    String? location,
   }) async {
     // Clear any previous user data first
     await _clearAllUserData();
@@ -50,6 +52,7 @@ class UserSessionProvider extends ChangeNotifier {
     await prefs.setString('user_email', email);
     if (name != null) await prefs.setString('user_name', name);
     if (phone != null) await prefs.setString('user_phone', phone);
+    if (location != null) await prefs.setString('user_location', location);
     await prefs.setBool('is_logged_in', true);
 
     _email = email;
@@ -65,6 +68,7 @@ class UserSessionProvider extends ChangeNotifier {
     await prefs.remove('user_email');
     await prefs.remove('user_name');
     await prefs.remove('user_phone');
+    await prefs.remove('user_location');
     await prefs.setBool('is_logged_in', false);
 
     _email = null;

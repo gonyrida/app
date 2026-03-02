@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:io';
 import '../../core/services/supabase_service.dart';
 import '../../data/models/supabase_user_model.dart';
 
@@ -57,19 +58,101 @@ class SupabaseUserRepository {
     String? themeMode,
     bool? notificationsEnabled,
   }) async {
+    print('🔥 === REPOSITORY: updateUserProfile START ===');
+
     try {
       final userId = SupabaseService.instance.currentUserId;
-      if (userId == null) throw Exception('User not authenticated');
+      print('🔥 Current user ID: $userId');
+
+      if (userId == null) {
+        print('🔥 ERROR: User not authenticated');
+        throw Exception('User not authenticated');
+      }
 
       final updateData = <String, dynamic>{};
-      if (name != null) updateData['name'] = name;
-      if (phone != null) updateData['phone'] = phone;
-      if (location != null) updateData['location'] = location;
-      if (bio != null) updateData['bio'] = bio;
-      if (avatarUrl != null) updateData['avatar_url'] = avatarUrl;
-      if (themeMode != null) updateData['theme_mode'] = themeMode;
-      if (notificationsEnabled != null)
+
+      if (name != null && name.isNotEmpty) {
+        updateData['name'] = name;
+        print('🔥 Adding name to update: "$name"');
+      } else {
+        print('🔥 Skipping name update (null or empty)');
+      }
+
+      if (phone != null && phone.isNotEmpty) {
+        updateData['phone'] = phone;
+        print('🔥 Adding phone to update: "$phone"');
+      } else {
+        print('🔥 Skipping phone update (null or empty)');
+      }
+
+      if (location != null && location.isNotEmpty) {
+        updateData['location'] = location;
+        print('🔥 Adding location to update: "$location"');
+      } else {
+        print('🔥 Skipping location update (null or empty)');
+      }
+
+      if (bio != null && bio.isNotEmpty) {
+        updateData['bio'] = bio;
+        print('🔥 Adding bio to update: "$bio"');
+      } else {
+        print('🔥 Skipping bio update (null or empty)');
+      }
+
+      if (avatarUrl != null && avatarUrl.isNotEmpty) {
+        updateData['avatar_url'] = avatarUrl;
+        print('🔥 Adding avatar_url to update: "$avatarUrl"');
+      } else {
+        print('🔥 Skipping avatar_url update (null or empty)');
+      }
+
+      if (themeMode != null) {
+        updateData['theme_mode'] = themeMode;
+        print('🔥 Adding theme_mode to update: "$themeMode"');
+      }
+
+      if (notificationsEnabled != null) {
         updateData['notifications_enabled'] = notificationsEnabled;
+        print(
+            '🔥 Adding notifications_enabled to update: $notificationsEnabled');
+      }
+
+      print('🔥 Final update data: $updateData');
+
+      if (updateData.isEmpty) {
+        print('🔥 WARNING: No data to update!');
+        throw Exception('No valid data to update');
+      }
+
+      print('🔥 Executing database update...');
+
+      // First check if profile exists
+      print('🔥 Checking if profile exists for user: $userId');
+      final checkResponse =
+          await _client.from('profiles').select('id').eq('id', userId);
+
+      print('🔥 Profile check result: ${checkResponse}');
+      print('🔥 Number of profiles found: ${checkResponse.length}');
+
+      if (checkResponse.isEmpty) {
+        print(
+            '🔥 WARNING: No profile found for user $userId - creating new profile');
+        // Create profile if it doesn't exist
+        final createResponse = await _client
+            .from('profiles')
+            .insert({
+              'id': userId,
+              'email': SupabaseService.instance.currentUser?.email ?? '',
+              'name': name ?? 'User',
+              ...updateData,
+            })
+            .select()
+            .single();
+        print('🔥 Profile created: $createResponse');
+        final result = SupabaseUserModel.fromMap(createResponse);
+        print('🔥 === REPOSITORY: createUserProfile SUCCESS ===');
+        return result;
+      }
 
       final response = await _client
           .from('profiles')
@@ -78,12 +161,18 @@ class SupabaseUserRepository {
           .select()
           .single();
 
+      print('🔥 Database response: $response');
+
       if (kDebugMode) {
         print('User profile updated successfully');
       }
 
-      return SupabaseUserModel.fromMap(response);
+      final result = SupabaseUserModel.fromMap(response);
+      print('🔥 === REPOSITORY: updateUserProfile SUCCESS ===');
+      return result;
     } catch (e) {
+      print('🔥 === REPOSITORY: updateUserProfile ERROR ===');
+      print('🔥 Error: $e');
       if (kDebugMode) {
         print('Error updating user profile: $e');
       }
@@ -97,11 +186,13 @@ class SupabaseUserRepository {
       final userId = SupabaseService.instance.currentUserId;
       if (userId == null) throw Exception('User not authenticated');
 
-      final fileBytes =
-          await _client.storage.from('avatars').download(filePath);
-
       final path = 'users/$userId/avatars/$fileName';
-      await _client.storage.from('avatars').upload(
+
+      // Read file bytes from local file path
+      final file = File(filePath);
+      final fileBytes = await file.readAsBytes();
+
+      await _client.storage.from('avatars').uploadBinary(
             path,
             fileBytes,
             fileOptions: const FileOptions(upsert: true),
@@ -185,10 +276,10 @@ class SupabaseUserRepository {
       final userId = SupabaseService.instance.currentUserId;
       if (userId == null) return false;
 
-      final count =
+      final response =
           await _client.from('profiles').select('id').eq('id', userId).count();
 
-      return count > 0;
+      return response.count > 0;
     } catch (e) {
       if (kDebugMode) {
         print('Error checking user profile existence: $e');

@@ -74,12 +74,19 @@ class SupabaseService {
     required String email,
     required String password,
     String? name,
+    String? phone,
+    String? location,
   }) async {
     try {
+      final Map<String, String?> userData = {};
+      if (name != null) userData['name'] = name;
+      if (phone != null) userData['phone'] = phone;
+      if (location != null) userData['location'] = location;
+
       final response = await _client.auth.signUp(
         email: email,
         password: password,
-        data: name != null ? {'name': name} : null,
+        data: userData.isNotEmpty ? userData : null,
       );
 
       if (kDebugMode) {

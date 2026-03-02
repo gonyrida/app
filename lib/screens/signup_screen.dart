@@ -20,6 +20,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _locationController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
@@ -33,6 +34,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _locationController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -76,6 +78,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
           email: _emailController.text.trim(),
           password: _passwordController.text,
           name: _nameController.text.trim(),
+          phone: _phoneController.text.trim(),
+          location: _locationController.text.trim(),
         );
 
         if (response.user != null) {
@@ -90,6 +94,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
               ..email = _emailController.text.trim()
               ..name = _nameController.text.trim()
               ..phone = _phoneController.text.trim()
+              ..location = _locationController.text.trim().isEmpty
+                  ? null
+                  : _locationController.text.trim()
               ..createdAt = DateTime.now()
               ..updatedAt = DateTime.now();
 
@@ -105,6 +112,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
             email: _emailController.text.trim(),
             name: _nameController.text.trim(),
             phone: _phoneController.text.trim(),
+            location: _locationController.text.trim().isEmpty
+                ? null
+                : _locationController.text.trim(),
           );
 
           if (mounted) {
@@ -366,6 +376,23 @@ class _SignUpScreenState extends State<SignUpScreen> {
                               }
                               return null;
                             },
+                          ),
+                          const SizedBox(height: 16),
+                          // Location Field
+                          TextFormField(
+                            controller: _locationController,
+                            decoration: InputDecoration(
+                              labelText: 'Location (Optional)',
+                              hintText: 'Enter your location',
+                              prefixIcon:
+                                  const Icon(Icons.location_on_outlined),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey.shade50,
+                            ),
+                            // Location is optional, so no validation
                           ),
                           const SizedBox(height: 16),
                           // Password Field

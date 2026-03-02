@@ -66,11 +66,15 @@ class SupabaseUserService {
     required String email,
     required String password,
     String? name,
+    String? phone,
+    String? location,
   }) async {
     return await SupabaseService.instance.signUpWithEmail(
       email: email,
       password: password,
       name: name,
+      phone: phone,
+      location: location,
     );
   }
 
@@ -105,16 +109,36 @@ class SupabaseUserService {
     String? themeMode,
     bool? notificationsEnabled,
   }) async {
-    final updatedProfile = await _repository.updateUserProfile(
-      name: name,
-      phone: phone,
-      location: location,
-      bio: bio,
-      avatarUrl: avatarUrl,
-      themeMode: themeMode,
-      notificationsEnabled: notificationsEnabled,
-    );
-    return updatedProfile.toLocalModel();
+    print(' === SERVICE: updateUserProfile START ===');
+    print('Parameters received:');
+    print('  name: "$name"');
+    print('  phone: "$phone"');
+    print('  location: "$location"');
+    print('  bio: "$bio"');
+    print('  avatarUrl: "$avatarUrl"');
+    print('  themeMode: "$themeMode"');
+    print('  notificationsEnabled: $notificationsEnabled');
+
+    try {
+      final updatedProfile = await _repository.updateUserProfile(
+        name: name,
+        phone: phone,
+        location: location,
+        bio: bio,
+        avatarUrl: avatarUrl,
+        themeMode: themeMode,
+        notificationsEnabled: notificationsEnabled,
+      );
+
+      print('Repository update completed, converting to local model...');
+      final result = updatedProfile.toLocalModel();
+      print(' === SERVICE: updateUserProfile SUCCESS ===');
+      return result;
+    } catch (e) {
+      print(' === SERVICE: updateUserProfile ERROR ===');
+      print('Error: $e');
+      rethrow;
+    }
   }
 
   /// Upload avatar image
@@ -220,6 +244,7 @@ class SupabaseUserSessionProvider extends ChangeNotifier {
     required String email,
     String? name,
     String? phone,
+    String? location,
   }) async {
     _email = email;
     _name = name;
@@ -234,6 +259,9 @@ class SupabaseUserSessionProvider extends ChangeNotifier {
     String? phone,
     String? email,
   }) async {
+    print('🔥 === SUPABASE SESSION PROVIDER: updateProfile START ===');
+    print('🔥 Parameters: name="$name", phone="$phone", email="$email"');
+
     await _userService.updateUserProfile(
       name: name,
       phone: phone,
@@ -243,6 +271,7 @@ class SupabaseUserSessionProvider extends ChangeNotifier {
     if (phone != null) _phone = phone;
     if (email != null) _email = email;
 
+    print('🔥 === SUPABASE SESSION PROVIDER: updateProfile SUCCESS ===');
     notifyListeners();
   }
 
