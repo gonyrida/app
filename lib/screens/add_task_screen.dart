@@ -6,11 +6,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart' as provider;
 
 import '../core/theme/app_theme.dart';
+import '../core/services/supabase_service.dart';
 import '../features/task_management/application/task_providers.dart';
 import '../features/task_management/domain/models/task_model.dart';
 import '../features/task_management/presentation/widgets/priority_chip.dart';
+import '../providers/user_session_provider.dart';
 
 /// AddTaskScreen - Create or edit a task
 class AddTaskScreen extends StatefulWidget {
@@ -639,6 +642,24 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       return;
     }
 
+    // Check if user is authenticated
+    if (!SupabaseService.instance.isAuthenticated) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Please sign in to create tasks',
+              style: GoogleFonts.inter(),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        // Navigate to login screen
+        context.go('/login');
+      }
+      return;
+    }
+
     print('SAVING TASK: Starting save process...');
 
     try {
@@ -662,6 +683,11 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       print('  Category: $_selectedCategory');
       print('  Priority: $_selectedPriority');
 
+      // Get current user ID
+      final sessionProvider =
+          provider.Provider.of<UserSessionProvider>(context, listen: false);
+      final userId = sessionProvider.email ?? '';
+
       final task = _isEditing
           ? widget.taskToEdit!.copyWith(
               title: _titleController.text.trim(),
@@ -673,6 +699,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
               subtasks: List.from(_subtasks),
             )
           : TaskModel.create(
+              userId: userId,
               title: _titleController.text.trim(),
               description: _descriptionController.text.trim(),
               priority: _selectedPriority,
@@ -684,9 +711,10 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
       print('SAVING TASK: Calling ${_isEditing ? "updateTask" : "addTask"}...');
 
+      final taskService = ref.read(taskServiceProvider);
       final success = _isEditing
-          ? await ref.read(taskNotifierProvider.notifier).updateTask(task)
-          : await ref.read(taskNotifierProvider.notifier).addTask(task);
+          ? await taskService.updateTask(task)
+          : await taskService.addTask(task);
 
       print('SAVING TASK: Result = $success');
 
@@ -721,7 +749,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     } catch (e, stackTrace) {
       print('ERROR in _saveTask: $e');
       print('Stack trace: $stackTrace');
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -775,9 +803,8 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
     if (confirmed == true && mounted) {
       try {
-        final success = await ref
-            .read(taskNotifierProvider.notifier)
-            .deleteTask(widget.taskToEdit!.id);
+        final taskService = ref.read(taskServiceProvider);
+        final success = await taskService.deleteTask(widget.taskToEdit!.id);
 
         if (success && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

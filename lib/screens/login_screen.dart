@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../core/routes/app_router.dart';
+import '../core/services/supabase_service.dart';
 import '../utils/constants.dart';
 import '../providers/user_session_provider.dart';
 
@@ -34,67 +35,81 @@ class _LoginScreenState extends State<LoginScreen> {
         _isLoading = true;
       });
 
-      // Simulate login delay
-      await Future.delayed(const Duration(seconds: 1));
-
       final email = _emailController.text.trim();
       final password = _passwordController.text;
 
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+      try {
+        // Call Supabase login
+        final response = await SupabaseService.instance.signInWithEmail(
+          email: email,
+          password: password,
+        );
 
-        // Check if user exists in session
-        final sessionProvider = context.read<UserSessionProvider>();
+        if (response.user != null) {
+          // Get user metadata for name
+          final userName = response.user?.userMetadata?['name'] ??
+              email
+                  .split('@')[0]
+                  .replaceAll(RegExp(r'[._-]'), ' ')
+                  .split(' ')
+                  .map((word) => word.isNotEmpty
+                      ? word[0].toUpperCase() + word.substring(1).toLowerCase()
+                      : '')
+                  .join(' ');
 
-        if (email.contains('@') && password.length >= 6) {
-          // Extract name from email or create a proper username
-          String userName = 'User';
-          if (email.contains('@')) {
-            final emailPrefix = email.split('@')[0];
-            // Convert email prefix to proper name format
-            userName = emailPrefix
-                .replaceAll(RegExp(r'[._-]'), ' ')
-                .split(' ')
-                .map((word) => word.isNotEmpty
-                    ? word[0].toUpperCase() + word.substring(1).toLowerCase()
-                    : '')
-                .join(' ');
-          }
-
-          // Save session with extracted name
+          // Save session with user data
+          final sessionProvider = context.read<UserSessionProvider>();
           await sessionProvider.saveSession(
             email: email,
             name: userName,
           );
 
-          // Show success message
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Welcome back, ${sessionProvider.name ?? "Chinit Hem"}!',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
 
-          // Navigate to home using go_router
-          context.go(AppRouter.home);
-        } else {
-          // Show error
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Invalid email or password',
-                style: const TextStyle(fontWeight: FontWeight.w600),
+            // Show success message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Welcome back, ${sessionProvider.name ?? "User"}!',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
               ),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 2),
-            ),
-          );
+            );
+
+            // Navigate to home using go_router
+            context.go(AppRouter.home);
+          }
+        } else {
+          throw Exception('Login failed');
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+
+          // Check for email not confirmed error
+          if (e.toString().contains('email_not_confirmed') ||
+              e.toString().contains('Email not confirmed')) {
+            _showEmailNotConfirmedDialog(email);
+          } else {
+            // Show general error
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Login failed: ${e.toString()}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
         }
       }
     }
@@ -155,6 +170,89 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     }
+  }
+
+  void _showEmailNotConfirmedDialog(String email) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.email_outlined, color: Colors.orange.shade600),
+            const SizedBox(width: 12),
+            const Text('Email Not Confirmed'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Your email address has not been confirmed yet. Please check your inbox for the confirmation email.',
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'If you didn\'t receive the confirmation email, we can resend it to you.',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Email: $email',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.blue.shade600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await SupabaseService.instance.resendEmailConfirmation(email);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text(
+                        'Confirmation email sent! Please check your inbox.',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      backgroundColor: Colors.green,
+                      duration: const Duration(seconds: 4),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Failed to resend confirmation email: ${e.toString()}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Resend Email'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showSignUpPrompt() {

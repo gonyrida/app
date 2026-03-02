@@ -6,26 +6,20 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart' as provider;
 
 import '../core/theme/app_theme.dart';
-import '../features/task_management/application/task_providers.dart';
+import '../providers/task_provider.dart';
 import '../features/task_management/presentation/widgets/task_card.dart';
 import '../providers/user_session_provider.dart';
 import '../widgets/search_bar.dart' as app_search;
 
 /// HomeScreen - Dashboard with greeting, stats, and today's tasks
-///
-/// Features:
-/// - Good morning greeting + user name + date
-/// - Stats cards: Total / Completed / Pending (blue/orange colors)
-/// - Today's tasks section with ListView of task cards
-/// - Floating blue + button to add task
-/// - BottomNavigationBar with 4 items (Home active)
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final statsAsync = ref.watch(taskStatsProvider);
-    final todaysTasksAsync = ref.watch(todaysTasksProvider);
+    final taskProvider = ref.watch(taskProviderProvider);
+    final stats = ref.watch(taskStatsProvider);
+    final todaysTasks = ref.watch(todaysTasksProvider);
     final searchQuery = ref.watch(searchQueryProvider);
     final userSession = provider.Provider.of<UserSessionProvider>(context);
 
@@ -34,21 +28,12 @@ class HomeScreen extends ConsumerWidget {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            // Header Section
+            /// Header
             SliverToBoxAdapter(
               child: _buildHeader(context, userSession),
             ),
 
-            // Stats Cards Section
-            SliverToBoxAdapter(
-              child: statsAsync.when(
-                data: (stats) => _buildStatsCards(context, stats),
-                loading: () => _buildStatsSkeleton(),
-                error: (error, stack) => _buildStatsError(error.toString()),
-              ),
-            ),
-
-            // Search Bar
+            /// Search Bar
             SliverToBoxAdapter(
               child: Padding(
                 padding:
@@ -63,7 +48,12 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
 
-            // Today's Tasks Header
+            /// Stats
+            SliverToBoxAdapter(
+              child: _buildStatsCards(context, stats),
+            ),
+
+            /// Today's Tasks Header
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -75,231 +65,89 @@ class HomeScreen extends ConsumerWidget {
                       style: GoogleFonts.inter(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                        color: Colors.black87,
                       ),
                     ),
-                    TextButton(
-                      onPressed: () => context.push('/list'),
-                      child: Text(
-                        'See All',
-                        style: GoogleFonts.inter(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Today's Tasks List
-            todaysTasksAsync.when(
-              data: (tasks) {
-                if (tasks.isEmpty) {
-                  return SliverToBoxAdapter(
-                    child: _buildEmptyState(),
-                  );
-                }
-
-                // Filter by search query if provided
-                final filteredTasks = searchQuery.isEmpty
-                    ? tasks
-                    : tasks.where((task) {
-                        return task.title
-                                .toLowerCase()
-                                .contains(searchQuery.toLowerCase()) ||
-                            (task.description
-                                    ?.toLowerCase()
-                                    .contains(searchQuery.toLowerCase()) ??
-                                false);
-                      }).toList();
-
-                if (filteredTasks.isEmpty && searchQuery.isNotEmpty) {
-                  return SliverToBoxAdapter(
-                    child: _buildNoSearchResults(),
-                  );
-                }
-
-                return SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final task = filteredTasks[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 6,
-                        ),
-                        child: TaskCard(
-                          task: task,
-                          onToggle: () async {
-                            final success = await ref
-                                .read(taskNotifierProvider.notifier)
-                                .toggleTaskCompletion(task.id);
-
-                            if (success && context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    task.isCompleted
-                                        ? 'Task marked as pending'
-                                        : 'Task completed!',
-                                    style: GoogleFonts.inter(),
-                                  ),
-                                  backgroundColor: task.isCompleted
-                                      ? Colors.orange
-                                      : Colors.green,
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
-                            }
-                          },
-                          onTap: () {
-                            context.push('/task-detail/${task.id}',
-                                extra: task);
-                          },
-                        ),
-                      );
-                    },
-                    childCount: filteredTasks.length,
-                  ),
-                );
-              },
-              loading: () => SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) => const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    child: TaskCardSkeleton(),
-                  ),
-                  childCount: 3,
-                ),
-              ),
-              error: (error, stack) => SliverToBoxAdapter(
-                child: _buildErrorState(error.toString()),
-              ),
-            ),
-
-            // Bottom padding for FAB
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 80),
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/add-task'),
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: Text(
-          'Add Task',
-          style: GoogleFonts.inter(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Build header with greeting and date
-  Widget _buildHeader(BuildContext context, UserSessionProvider userSession) {
-    final now = DateTime.now();
-    final hour = now.hour;
-
-    String greeting;
-    if (hour < 12) {
-      greeting = 'Good Morning';
-    } else if (hour < 17) {
-      greeting = 'Good Afternoon';
-    } else {
-      greeting = 'Good Evening';
-    }
-
-    // Use stored name or extract from email, or default to 'User'
-    String displayName = 'User';
-    if (userSession.name?.isNotEmpty == true) {
-      displayName = userSession.name!;
-    } else if (userSession.email?.isNotEmpty == true) {
-      // Extract name from email as fallback
-      final emailPrefix = userSession.email!.split('@')[0];
-      displayName = emailPrefix
-          .replaceAll(RegExp(r'[._-]'), ' ')
-          .split(' ')
-          .map((word) => word.isNotEmpty
-              ? word[0].toUpperCase() + word.substring(1).toLowerCase()
-              : '')
-          .join(' ');
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    greeting,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    displayName,
-                    style: GoogleFonts.inter(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  if (userSession.phone?.isNotEmpty == true) ...[
-                    const SizedBox(height: 4),
                     Text(
-                      userSession.phone!,
+                      'See all',
                       style: GoogleFonts.inter(
                         fontSize: 14,
-                        color: AppColors.textSecondary,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
-                  Icons.notifications_outlined,
-                  color: AppColors.primary,
-                  size: 24,
+              ),
+            ),
+
+            /// Tasks List / States
+            if (searchQuery.isNotEmpty) ...[
+              SliverToBoxAdapter(
+                child: _buildNoSearchResults(),
+              ),
+            ] else if (todaysTasks.isEmpty) ...[
+              SliverToBoxAdapter(
+                child: _buildEmptyState(),
+              ),
+            ] else ...[
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final task = todaysTasks[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      child: TaskCard(
+                        task: task,
+                        onToggle: () {
+                          taskProvider.toggleTask(int.tryParse(task.id) ?? 0);
+                        },
+                      ),
+                    );
+                  },
+                  childCount: todaysTasks.length,
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 8),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => context.push('/add-task'),
+        backgroundColor: AppColors.primary,
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
+    );
+  }
+
+  /// Header
+  Widget _buildHeader(BuildContext context, UserSessionProvider userSession) {
+    final now = DateTime.now();
+    final greeting = _getGreeting(now);
+    final dateStr = DateFormat('EEEE, MMM d').format(now);
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Text(
-            DateFormat('EEEE, MMMM d, yyyy').format(now),
+            '$greeting, ${userSession.name ?? "User"}!',
             style: GoogleFonts.inter(
-              fontSize: 14,
-              color: Colors.grey[600],
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            dateStr,
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              color: Colors.grey.shade600,
             ),
           ),
         ],
@@ -307,7 +155,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  /// Build stats cards (Total / Completed / Pending)
+  /// Stats Section
   Widget _buildStatsCards(BuildContext context, TaskStats stats) {
     return Container(
       margin: const EdgeInsets.all(16),
@@ -331,43 +179,31 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildStatItem(
-            'Total',
-            stats.total.toString(),
-            Icons.list_alt,
-            Colors.white,
+          Expanded(
+            child: _buildStatItem('Total Tasks', stats.total.toString(),
+                Icons.list_alt, Colors.white),
           ),
           _buildStatDivider(),
-          _buildStatItem(
-            'Completed',
-            stats.completed.toString(),
-            Icons.check_circle,
-            Colors.greenAccent,
+          Expanded(
+            child: _buildStatItem('Completed', stats.completed.toString(),
+                Icons.check_circle, Colors.greenAccent),
           ),
           _buildStatDivider(),
-          _buildStatItem(
-            'Pending',
-            stats.pending.toString(),
-            Icons.pending_actions,
-            Colors.orangeAccent,
+          Expanded(
+            child: _buildStatItem('Pending', stats.pending.toString(),
+                Icons.pending_actions, Colors.orangeAccent),
           ),
         ],
       ),
     );
   }
 
-  /// Build individual stat item
   Widget _buildStatItem(
-    String label,
-    String value,
-    IconData icon,
-    Color valueColor,
-  ) {
+      String label, String value, IconData icon, Color valueColor) {
     return Column(
       children: [
-        Icon(icon, color: Colors.white70, size: 28),
+        Icon(icon, color: valueColor, size: 28),
         const SizedBox(height: 8),
         Text(
           value,
@@ -377,6 +213,7 @@ class HomeScreen extends ConsumerWidget {
             color: valueColor,
           ),
         ),
+        const SizedBox(height: 4),
         Text(
           label,
           style: GoogleFonts.inter(
@@ -388,7 +225,6 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  /// Build divider between stats
   Widget _buildStatDivider() {
     return Container(
       height: 50,
@@ -397,53 +233,10 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  /// Build skeleton loading for stats
-  Widget _buildStatsSkeleton() {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      height: 120,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade300,
-        borderRadius: BorderRadius.circular(20),
-      ),
-    );
-  }
-
-  /// Build error state for stats
-  Widget _buildStatsError(String error) {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.red.shade200),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.error_outline, color: Colors.red.shade400),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Failed to load stats: $error',
-              style: GoogleFonts.inter(color: Colors.red.shade700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Build empty state when no tasks
+  /// Empty State
   Widget _buildEmptyState() {
-    return Container(
-      margin: const EdgeInsets.all(32),
+    return Padding(
       padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
       child: Column(
         children: [
           Icon(
@@ -453,31 +246,30 @@ class HomeScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'No tasks for today!',
+            'No tasks for today',
             style: GoogleFonts.inter(
               fontSize: 18,
               fontWeight: FontWeight.w600,
-              color: Colors.grey.shade700,
+              color: Colors.grey.shade600,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Enjoy your free time or add a new task',
+            'Tap the + button to add your first task',
             style: GoogleFonts.inter(
               fontSize: 14,
               color: Colors.grey.shade500,
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
 
-  /// Build no search results state
+  /// No Search Results
   Widget _buildNoSearchResults() {
-    return Container(
-      margin: const EdgeInsets.all(32),
+    return Padding(
+      padding: const EdgeInsets.all(32),
       child: Column(
         children: [
           Icon(
@@ -489,8 +281,17 @@ class HomeScreen extends ConsumerWidget {
           Text(
             'No tasks found',
             style: GoogleFonts.inter(
-              fontSize: 16,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
               color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Try adjusting your search criteria',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: Colors.grey.shade500,
             ),
           ),
         ],
@@ -498,27 +299,14 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  /// Build error state
-  Widget _buildErrorState(String error) {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.error, color: Colors.red.shade400),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Error: $error',
-              style: GoogleFonts.inter(color: Colors.red.shade700),
-            ),
-          ),
-        ],
-      ),
-    );
+  String _getGreeting(DateTime dateTime) {
+    final hour = dateTime.hour;
+    if (hour < 12) {
+      return 'Good morning';
+    } else if (hour < 17) {
+      return 'Good afternoon';
+    } else {
+      return 'Good evening';
+    }
   }
 }

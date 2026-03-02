@@ -484,9 +484,8 @@ class TaskDetailScreen extends ConsumerWidget {
     WidgetRef ref,
     TaskModel task,
   ) async {
-    final success = await ref
-        .read(taskNotifierProvider.notifier)
-        .toggleTaskCompletion(task.id);
+    final taskService = ref.read(taskServiceProvider);
+    final success = await taskService.toggleTaskCompletion(task.id);
 
     if (success && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -551,8 +550,8 @@ class TaskDetailScreen extends ConsumerWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      final success =
-          await ref.read(taskNotifierProvider.notifier).deleteTask(task.id);
+      final taskService = ref.read(taskServiceProvider);
+      final success = await taskService.deleteTask(task.id);
 
       if (success && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -1,11 +1,16 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../application/providers/task_providers.dart';
+import '../../../../core/services/supabase_service.dart';
+import '../../application/task_providers.dart' as task_providers;
+import '../../application/supabase_task_providers.dart' as supabase_providers;
 import '../widgets/task_card.dart';
-import '../widgets/priority_chip.dart';
+
+// Import TaskStats from task_providers
+import '../../application/task_providers.dart';
 
 /// HomeScreen - Dashboard with greeting, stats, and today's tasks
 ///
@@ -35,11 +40,44 @@ class HomeScreen extends ConsumerWidget {
     return formatter.format(now);
   }
 
+  /// Convert Map<String, int> to TaskStats object
+  TaskStats _convertMapToTaskStats(Map<String, int> statsMap) {
+    return TaskStats(
+      total: statsMap['total'] ?? 0,
+      completed: statsMap['completed'] ?? 0,
+      pending: statsMap['pending'] ?? 0,
+      highPriority: statsMap['high_priority'] ?? 0,
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final todayTasksAsync = ref.watch(todayTasksProvider);
-    final statsAsync = ref.watch(taskStatsProvider);
-    final taskNotifier = ref.read(taskNotifierProvider.notifier);
+    final todayTasksAsync = ref.watch(task_providers.todaysTasksProvider);
+    final statsAsync = ref.watch(supabase_providers.supabaseTaskStatsProvider);
+    final taskService = ref.read(task_providers.taskServiceProvider);
+
+    // Debug: Add logging to check authentication state
+    final currentUserId = SupabaseService.instance.currentUserId;
+    final isAuthenticated = SupabaseService.instance.isAuthenticated;
+
+    // Force refresh stats if they seem to be missing
+    if (statsAsync.hasValue &&
+        (statsAsync.value?['total'] ?? 0) == 0 &&
+        currentUserId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.invalidate(supabase_providers.supabaseTaskStatsProvider);
+      });
+    }
+
+    if (kDebugMode) {
+      print('DEBUG HomeScreen: User ID: $currentUserId');
+      print('DEBUG HomeScreen: Is Authenticated: $isAuthenticated');
+      print('DEBUG HomeScreen: Stats state: ${statsAsync.value}');
+      print('DEBUG HomeScreen: Stats loading: ${statsAsync.isLoading}');
+      print('DEBUG HomeScreen: Stats error: ${statsAsync.error}');
+      print(
+          'DEBUG HomeScreen: Today tasks state: ${todayTasksAsync.value?.length} tasks');
+    }
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -103,6 +141,62 @@ class HomeScreen extends ConsumerWidget {
                         color: Colors.grey[600],
                       ),
                     ),
+                    // Debug info
+                    if (kDebugMode) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isAuthenticated
+                              ? Colors.green.withOpacity(0.1)
+                              : Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isAuthenticated ? Colors.green : Colors.red,
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Debug Info:',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color:
+                                    isAuthenticated ? Colors.green : Colors.red,
+                              ),
+                            ),
+                            Text(
+                              'User ID: ${currentUserId ?? "Not logged in"}',
+                              style: const TextStyle(
+                                  fontSize: 10, color: Colors.black87),
+                            ),
+                            Text(
+                              'Auth Status: ${isAuthenticated ? "Authenticated" : "Not Authenticated"}',
+                              style: const TextStyle(
+                                  fontSize: 10, color: Colors.black87),
+                            ),
+                            Text(
+                              'Stats: ${statsAsync.value?['total'] ?? 0} total, ${statsAsync.value?['completed'] ?? 0} completed, ${statsAsync.value?['pending'] ?? 0} pending',
+                              style: const TextStyle(
+                                  fontSize: 10, color: Colors.black87),
+                            ),
+                            Text(
+                              'Stats Async State: ${statsAsync.isLoading ? "Loading" : statsAsync.hasError ? "Error: ${statsAsync.error}" : "Data"}',
+                              style: const TextStyle(
+                                  fontSize: 10, color: Colors.black87),
+                            ),
+                            Text(
+                              'Today Tasks: ${todayTasksAsync.value?.length ?? 0} tasks',
+                              style: const TextStyle(
+                                  fontSize: 10, color: Colors.black87),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -111,54 +205,71 @@ class HomeScreen extends ConsumerWidget {
             // Stats Cards
             SliverToBoxAdapter(
               child: statsAsync.when(
-                data: (stats) => Container(
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppColors.primary,
-                        AppColors.primaryDark,
+                data: (statsMap) {
+                  final stats = _convertMapToTaskStats(statsMap);
+                  if (kDebugMode) {
+                    print(
+                        'DEBUG HomeScreen: Stats data received - Total: ${stats.total}, Completed: ${stats.completed}, Pending: ${stats.pending}');
+                  }
+                  return Container(
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppColors.primary,
+                          AppColors.primaryDark,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
                       ],
                     ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildStatItem(
-                          'Total', stats.total.toString(), Icons.list_alt),
-                      _buildStatDivider(),
-                      _buildStatItem('Completed', stats.completed.toString(),
-                          Icons.check_circle),
-                      _buildStatDivider(),
-                      _buildStatItem('Pending', stats.pending.toString(),
-                          Icons.pending_actions),
-                    ],
-                  ),
-                ),
-                loading: () => Container(
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.all(16),
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  ),
-                ),
-                error: (_, __) => const SizedBox.shrink(),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildStatItem(
+                            'Total', stats.total.toString(), Icons.list_alt),
+                        _buildStatDivider(),
+                        _buildStatItem('Completed', stats.completed.toString(),
+                            Icons.check_circle),
+                        _buildStatDivider(),
+                        _buildStatItem('Pending', stats.pending.toString(),
+                            Icons.pending_actions),
+                      ],
+                    ),
+                  );
+                },
+                loading: () {
+                  if (kDebugMode) {
+                    print('DEBUG HomeScreen: Stats loading...');
+                  }
+                  return Container(
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                  );
+                },
+                error: (error, stack) {
+                  if (kDebugMode) {
+                    print('DEBUG HomeScreen: Stats error: $error');
+                  }
+                  return const SizedBox.shrink();
+                },
               ),
             ),
 
@@ -235,7 +346,7 @@ class HomeScreen extends ConsumerWidget {
                         return TaskCard(
                           task: task,
                           onToggle: () {
-                            taskNotifier.toggleTaskCompletion(task.id);
+                            taskService.toggleTaskCompletion(task.id);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
@@ -252,7 +363,6 @@ class HomeScreen extends ConsumerWidget {
                             );
                           },
                         );
-
                       },
                       childCount: tasks.length,
                     ),

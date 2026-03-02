@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:provider/provider.dart' as provider;
@@ -11,7 +12,7 @@ import 'providers/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Load environment variables and initialize Supabase
   try {
     await EnvironmentConfig.load();
@@ -52,8 +53,8 @@ class _MyAppState extends ConsumerState<MyApp> {
   /// Check if user is already logged in
   Future<void> _checkAuthStatus() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
+      // Check Supabase authentication state instead of SharedPreferences
+      final supabaseAuth = SupabaseService.instance.isAuthenticated;
 
       // Load saved theme preference
       if (mounted) {
@@ -61,15 +62,22 @@ class _MyAppState extends ConsumerState<MyApp> {
           context,
           listen: false,
         );
+        final prefs = await SharedPreferences.getInstance();
         final isDarkMode = prefs.getBool('is_dark_mode') ?? false;
         if (isDarkMode) {
           themeProvider.setThemeMode(ThemeMode.dark);
         }
       }
 
+      if (kDebugMode) {
+        print('DEBUG: Supabase auth status: $supabaseAuth');
+        print(
+            'DEBUG: Current user: ${SupabaseService.instance.currentUser?.email}');
+      }
+
       if (mounted) {
         setState(() {
-          _isLoggedIn = isLoggedIn;
+          _isLoggedIn = supabaseAuth;
           _isLoading = false;
         });
       }

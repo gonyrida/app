@@ -35,7 +35,7 @@ class SupabaseTaskModel {
   /// Create from Supabase JSON data
   factory SupabaseTaskModel.fromMap(Map<String, dynamic> map) {
     debugPrint('Creating SupabaseTaskModel from map: $map');
-    
+
     return SupabaseTaskModel(
       id: map['id'] as String,
       userId: map['user_id'] as String,
@@ -43,13 +43,14 @@ class SupabaseTaskModel {
       description: map['description'] as String?,
       priority: map['priority'] as String? ?? 'medium',
       category: map['category'] as String? ?? 'Personal',
-      dueDate: map['due_date'] != null 
-          ? DateTime.parse(map['due_date'] as String) 
+      dueDate: map['due_date'] != null
+          ? DateTime.parse(map['due_date'] as String)
           : null,
       isCompleted: map['is_completed'] as bool? ?? false,
       subtasks: (map['subtasks'] as List<dynamic>?)
-          ?.map((e) => e as String)
-          .toList() ?? [],
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
       imageUrl: map['image_url'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
@@ -122,7 +123,7 @@ class SupabaseTaskModel {
   /// Convert to local TaskModel for compatibility
   TaskModel toLocalModel() {
     final task = TaskModel()
-      ..id = int.tryParse(id) ?? 0
+      ..id = id
       ..title = title
       ..description = description
       ..priority = _parsePriority(priority)
@@ -176,7 +177,13 @@ class SupabaseTaskModel {
     if (difference == -1) return 'Yesterday';
     if (difference > 0 && difference < 7) {
       final weekdays = [
-        'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+        'Sunday'
       ];
       return weekdays[dueDate!.weekday - 1];
     }

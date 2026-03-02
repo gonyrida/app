@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:provider/provider.dart' as provider;
 import 'package:supabase_auth_ui/supabase_auth_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/services/supabase_service.dart';
@@ -11,16 +12,18 @@ class EnhancedSupabaseAuthScreen extends ConsumerStatefulWidget {
   const EnhancedSupabaseAuthScreen({super.key});
 
   @override
-  ConsumerState<EnhancedSupabaseAuthScreen> createState() => _EnhancedSupabaseAuthScreenState();
+  ConsumerState<EnhancedSupabaseAuthScreen> createState() =>
+      _EnhancedSupabaseAuthScreenState();
 }
 
-class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAuthScreen> {
+class _EnhancedSupabaseAuthScreenState
+    extends ConsumerState<EnhancedSupabaseAuthScreen> {
   bool _isLogin = true;
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _agreeToTerms = false;
-  
+
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -47,10 +50,14 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
   String? _validatePassword(String? value) {
     if (value == null || value.isEmpty) return 'Password is required';
     if (value.length < 8) return 'Password must be at least 8 characters';
-    if (!RegExp(r'^(?=.*[a-z])').hasMatch(value)) return 'Password must contain lowercase letter';
-    if (!RegExp(r'^(?=.*[A-Z])').hasMatch(value)) return 'Password must contain uppercase letter';
-    if (!RegExp(r'^(?=.*\d)').hasMatch(value)) return 'Password must contain number';
-    if (!RegExp(r'^(?=.*[@$!%*?&])').hasMatch(value)) return 'Password must contain special character';
+    if (!RegExp(r'^(?=.*[a-z])').hasMatch(value))
+      return 'Password must contain lowercase letter';
+    if (!RegExp(r'^(?=.*[A-Z])').hasMatch(value))
+      return 'Password must contain uppercase letter';
+    if (!RegExp(r'^(?=.*\d)').hasMatch(value))
+      return 'Password must contain number';
+    if (!RegExp(r'^(?=.*[@$!%*?&])').hasMatch(value))
+      return 'Password must contain special character';
     return null;
   }
 
@@ -61,8 +68,10 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
   }
 
   String? _validateName(String? value) {
-    if (!_isLogin && (value == null || value.isEmpty)) return 'Name is required';
-    if (!_isLogin && value!.length < 2) return 'Name must be at least 2 characters';
+    if (!_isLogin && (value == null || value.isEmpty))
+      return 'Name is required';
+    if (!_isLogin && value!.length < 2)
+      return 'Name must be at least 2 characters';
     return null;
   }
 
@@ -77,7 +86,7 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
 
     try {
       final userService = ref.read(supabaseUserServiceProvider);
-      
+
       if (_isLogin) {
         await userService.signInWithEmail(
           email: _emailController.text.trim(),
@@ -93,16 +102,26 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
 
       if (mounted) {
         _showSuccess(_isLogin ? 'Login successful!' : 'Account created!');
-        
-        // Clear form and reinitialize session
+
+        // Reinitialize session to get fresh user data
+        final sessionProvider =
+            provider.Provider.of<SupabaseUserSessionProvider>(context,
+                listen: false);
+        await sessionProvider.initialize();
+
+        // Clear form
         _formKey.currentState?.reset();
         _agreeToTerms = false;
-        
+
         await Future.delayed(const Duration(seconds: 1));
         context.go('/home');
       }
     } on AuthException catch (e) {
-      _showError(_getAuthErrorMessage(e));
+      if (e.message == 'Email not confirmed') {
+        _showEmailNotConfirmedDialog();
+      } else {
+        _showError(_getAuthErrorMessage(e));
+      }
     } catch (e) {
       _showError('An unexpected error occurred');
     } finally {
@@ -124,9 +143,80 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
         return 'An account with this email already exists';
       case 'Signup not allowed for this instance':
         return 'Registration is currently disabled';
+      case 'Email not confirmed':
+        return 'Email not confirmed. Please check your inbox.';
       default:
         return e.message ?? 'Authentication failed';
     }
+  }
+
+  void _showEmailNotConfirmedDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.email_outlined, color: Colors.orange.shade600),
+            const SizedBox(width: 12),
+            const Text('Email Not Confirmed'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Your email address has not been confirmed yet. Please check your inbox for the confirmation email.',
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'If you didn\'t receive the confirmation email, we can resend it to you.',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Email: ${_emailController.text.trim()}',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.blue.shade600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                final userService = ref.read(supabaseUserServiceProvider);
+                await userService
+                    .resendEmailConfirmation(_emailController.text.trim());
+                if (mounted) {
+                  _showSuccess(
+                      'Confirmation email sent! Please check your inbox.');
+                }
+              } catch (e) {
+                if (mounted) {
+                  _showError('Failed to resend confirmation email');
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue.shade600,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Resend Email'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showSuccess(String message) {
@@ -167,7 +257,7 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 40),
-              
+
               // Logo and Title
               Column(
                 children: [
@@ -195,23 +285,25 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                   Text(
                     'Task Manager Pro',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _isLogin ? 'Welcome back! Please sign in' : 'Create your secure account',
+                    _isLogin
+                        ? 'Welcome back! Please sign in'
+                        : 'Create your secure account',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Colors.grey.shade600,
-                    ),
+                          color: Colors.grey.shade600,
+                        ),
                     textAlign: TextAlign.center,
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 40),
-              
+
               // Security Notice
               Container(
                 padding: const EdgeInsets.all(16),
@@ -236,9 +328,9 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                   ],
                 ),
               ),
-              
+
               const SizedBox(height: 32),
-              
+
               // Enhanced Auth Form
               Card(
                 elevation: 8,
@@ -262,7 +354,7 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                           ),
                           const SizedBox(height: 16),
                         ],
-                        
+
                         // Email field
                         TextFormField(
                           controller: _emailController,
@@ -276,7 +368,7 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                           autofillHints: const [AutofillHints.email],
                         ),
                         const SizedBox(height: 16),
-                        
+
                         // Password field
                         TextFormField(
                           controller: _passwordController,
@@ -287,16 +379,21 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                             Icons.lock_outline,
                             suffixIcon: IconButton(
                               icon: Icon(
-                                _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                _obscurePassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
                               ),
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                              onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword),
                             ),
                           ),
-                          textInputAction: _isLogin ? TextInputAction.done : TextInputAction.next,
+                          textInputAction: _isLogin
+                              ? TextInputAction.done
+                              : TextInputAction.next,
                           autofillHints: const [AutofillHints.password],
                         ),
                         const SizedBox(height: 16),
-                        
+
                         // Confirm password (signup only)
                         if (!_isLogin) ...[
                           TextFormField(
@@ -308,9 +405,13 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                               Icons.lock_outline,
                               suffixIcon: IconButton(
                                 icon: Icon(
-                                  _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                                  _obscureConfirmPassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
                                 ),
-                                onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                                onPressed: () => setState(() =>
+                                    _obscureConfirmPassword =
+                                        !_obscureConfirmPassword),
                               ),
                             ),
                             textInputAction: TextInputAction.done,
@@ -318,33 +419,35 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                           ),
                           const SizedBox(height: 16),
                         ],
-                        
+
                         // Terms and conditions (signup only)
                         if (!_isLogin) ...[
                           Row(
                             children: [
-                            Checkbox(
-                              value: _agreeToTerms,
-                              onChanged: (value) => setState(() => _agreeToTerms = value!),
-                              activeColor: Colors.blue.shade600,
-                            ),
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: () => setState(() => _agreeToTerms = !_agreeToTerms),
-                                child: Text(
-                                  'I agree to the Terms of Service and Privacy Policy',
-                                  style: TextStyle(
-                                    color: Colors.grey.shade700,
-                                    fontSize: 14,
+                              Checkbox(
+                                value: _agreeToTerms,
+                                onChanged: (value) =>
+                                    setState(() => _agreeToTerms = value!),
+                                activeColor: Colors.blue.shade600,
+                              ),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setState(
+                                      () => _agreeToTerms = !_agreeToTerms),
+                                  child: Text(
+                                    'I agree to the Terms of Service and Privacy Policy',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade700,
+                                      fontSize: 14,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
                         ],
-                        
+
                         // Submit button
                         SizedBox(
                           width: double.infinity,
@@ -382,18 +485,20 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Toggle between Login and Signup
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    _isLogin ? "Don't have an account?" : 'Already have an account?',
+                    _isLogin
+                        ? "Don't have an account?"
+                        : 'Already have an account?',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey.shade600,
-                    ),
+                          color: Colors.grey.shade600,
+                        ),
                   ),
                   TextButton(
                     onPressed: () {
@@ -413,9 +518,9 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 32),
-              
+
               // Divider
               Row(
                 children: [
@@ -425,16 +530,16 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                     child: Text(
                       'OR',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey.shade500,
-                      ),
+                            color: Colors.grey.shade500,
+                          ),
                     ),
                   ),
                   const Expanded(child: Divider()),
                 ],
               ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Social Login with Enhanced Security
               Card(
                 elevation: 4,
@@ -445,9 +550,9 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                       Text(
                         'Continue with secure social login',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey.shade700,
-                          fontWeight: FontWeight.w500,
-                        ),
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w500,
+                            ),
                       ),
                       const SizedBox(height: 16),
                       SupaSocialsAuth(
@@ -457,9 +562,10 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                           ProviderIcon.github,
                         ],
                         onSuccess: (session) async {
-                          final sessionProvider = ref.read(supabaseSessionProvider);
+                          final sessionProvider =
+                              ref.read(supabaseSessionProvider);
                           await sessionProvider.initialize();
-                          
+
                           if (mounted) {
                             _showSuccess('Secure login successful!');
                             context.go('/home');
@@ -473,15 +579,16 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Forgot Password (login only)
               if (_isLogin)
                 Center(
                   child: TextButton.icon(
                     onPressed: _isLoading ? null : _showForgotPasswordDialog,
-                    icon: Icon(Icons.lock_reset, size: 18, color: Colors.blue.shade600),
+                    icon: Icon(Icons.lock_reset,
+                        size: 18, color: Colors.blue.shade600),
                     label: Text(
                       'Forgot Password?',
                       style: TextStyle(
@@ -491,9 +598,9 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                     ),
                   ),
                 ),
-              
+
               const SizedBox(height: 16),
-              
+
               // Security Features
               Container(
                 padding: const EdgeInsets.all(16),
@@ -505,7 +612,8 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.verified_user, color: Colors.green.shade600, size: 16),
+                        Icon(Icons.verified_user,
+                            color: Colors.green.shade600, size: 16),
                         const SizedBox(width: 8),
                         Text(
                           '256-bit SSL Encryption',
@@ -520,7 +628,8 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(Icons.gpp_good, color: Colors.green.shade600, size: 16),
+                        Icon(Icons.gpp_good,
+                            color: Colors.green.shade600, size: 16),
                         const SizedBox(width: 8),
                         Text(
                           'GDPR Compliant',
@@ -535,7 +644,8 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(Icons.security, color: Colors.green.shade600, size: 16),
+                        Icon(Icons.security,
+                            color: Colors.green.shade600, size: 16),
                         const SizedBox(width: 8),
                         Text(
                           'Two-Factor Authentication Available',
@@ -557,7 +667,8 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
     );
   }
 
-  InputDecoration _inputDecoration(String label, IconData icon, {Widget? suffixIcon}) {
+  InputDecoration _inputDecoration(String label, IconData icon,
+      {Widget? suffixIcon}) {
     return InputDecoration(
       labelText: label,
       prefixIcon: Icon(icon, color: Colors.grey.shade600),
@@ -586,7 +697,7 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
 
   void _showForgotPasswordDialog() {
     final emailController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -601,7 +712,8 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Enter your email address to receive a secure password reset link.'),
+            const Text(
+                'Enter your email address to receive a secure password reset link.'),
             const SizedBox(height: 16),
             TextField(
               controller: emailController,
@@ -621,11 +733,12 @@ class _EnhancedSupabaseAuthScreenState extends ConsumerState<EnhancedSupabaseAut
           ElevatedButton(
             onPressed: () async {
               final email = emailController.text.trim();
-              if (email.isNotEmpty && RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+              if (email.isNotEmpty &&
+                  RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
                 try {
                   final userService = ref.read(supabaseUserServiceProvider);
                   await userService.resetPassword(email);
-                  
+
                   if (mounted) {
                     Navigator.pop(context);
                     _showSuccess('Password reset email sent!');

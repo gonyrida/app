@@ -1,15 +1,10 @@
-import 'package:isar/isar.dart';
-
-part 'user_model.g.dart';
-
-/// UserModel - Isar collection for user profile
+/// UserModel - Supabase-compatible model for user profile
 ///
 /// This model represents a user profile with all required fields.
-/// It includes Isar annotations for database persistence.
-@collection
+/// It's designed to work with Supabase database.
 class UserModel {
-  /// Auto-increment ID for Isar
-  Id id = Isar.autoIncrement;
+  /// UUID for Supabase (string format)
+  String id;
 
   /// User's full name
   late String name;
@@ -42,7 +37,9 @@ class UserModel {
   DateTime updatedAt = DateTime.now();
 
   /// Default constructor
-  UserModel();
+  UserModel({
+    String? id,
+  }) : id = id ?? '';
 
   /// Factory constructor for creating users
   factory UserModel.create({
@@ -94,7 +91,6 @@ class UserModel {
   }
 
   /// Get theme mode as enum
-  @enumerated
   ThemeModePreference get themeModeEnum {
     switch (themeMode) {
       case 'light':

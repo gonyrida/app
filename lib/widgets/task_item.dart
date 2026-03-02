@@ -152,7 +152,7 @@ class TaskItem extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${task.formattedDueDate}${task.formattedDueTime.isNotEmpty ? ', ${task.formattedDueTime}' : ''}',
+                        '${task.formattedDueDate}${task.formattedDueTime?.isNotEmpty == true ? ', ${task.formattedDueTime}' : ''}',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey[600],

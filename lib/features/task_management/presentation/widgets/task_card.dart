@@ -85,7 +85,7 @@ class TaskCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            
+
             // Image (optional)
             if (showImage &&
                 task.imagePath != null &&
@@ -96,7 +96,7 @@ class TaskCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
             ],
-            
+
             // Content - with tap gesture
             Expanded(
               child: GestureDetector(
@@ -161,7 +161,7 @@ class TaskCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${task.formattedDueDate}${task.formattedDueTime.isNotEmpty ? ', ${task.formattedDueTime}' : ''}',
+                          '${task.formattedDueDate}${task.formattedDueTime?.isNotEmpty == true ? ', ${task.formattedDueTime}' : ''}',
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.grey.shade600,

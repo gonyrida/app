@@ -1,8 +1,3 @@
-import 'package:isar/isar.dart';
-import 'package:flutter/foundation.dart';
-
-part 'task_model.g.dart';
-
 /// Priority levels for tasks
 enum Priority {
   low,
@@ -37,15 +32,17 @@ extension PriorityExtension on Priority {
   }
 }
 
-/// TaskModel - Isar collection for task management
+/// TaskModel - Supabase-compatible model for task management
 ///
 /// This model represents a task with all required fields for the
-/// task management feature. It includes Isar annotations for
-/// database persistence.
-@collection
+/// task management feature. It's designed to work with Supabase
+/// database and includes userId for data isolation.
 class TaskModel {
-  /// Auto-increment ID for Isar
-  Id id = Isar.autoIncrement;
+  /// UUID for Supabase (string format)
+  String id;
+
+  /// User email for data isolation (maps to Supabase user_id)
+  late String userId;
 
   /// Task title (required)
   late String title;
@@ -54,7 +51,6 @@ class TaskModel {
   String? description;
 
   /// Task priority level
-  @enumerated
   late Priority priority;
 
   /// Task category (work/personal/urgent/school)
@@ -79,10 +75,11 @@ class TaskModel {
   DateTime updatedAt = DateTime.now();
 
   /// Default constructor
-  TaskModel();
+  TaskModel({String? id}) : id = id ?? '';
 
-  /// Factory constructor for creating tasks
+  /// Factory constructor for creating tasks with userId
   factory TaskModel.create({
+    required String userId,
     required String title,
     String? description,
     Priority priority = Priority.medium,
@@ -92,6 +89,30 @@ class TaskModel {
     String? imagePath,
   }) {
     final task = TaskModel()
+      ..userId = userId
+      ..title = title
+      ..description = description
+      ..priority = priority
+      ..category = category
+      ..dueDate = dueDate
+      ..subtasks = subtasks ?? []
+      ..imagePath = imagePath;
+    return task;
+  }
+
+  /// Factory constructor for creating tasks without userId (for backward compatibility)
+  factory TaskModel.createLegacy({
+    required String title,
+    String? description,
+    Priority priority = Priority.medium,
+    String category = 'Personal',
+    DateTime? dueDate,
+    List<String>? subtasks,
+    String? imagePath,
+    String? id,
+  }) {
+    final task = TaskModel(id: id ?? '')
+      ..userId = '' // Will be set later when user is available
       ..title = title
       ..description = description
       ..priority = priority
@@ -104,6 +125,8 @@ class TaskModel {
 
   /// Copy with method for immutability
   TaskModel copyWith({
+    String? id,
+    String? userId,
     String? title,
     String? description,
     Priority? priority,
@@ -113,8 +136,8 @@ class TaskModel {
     List<String>? subtasks,
     String? imagePath,
   }) {
-    final task = TaskModel()
-      ..id = id
+    final task = TaskModel(id: id ?? this.id)
+      ..userId = userId ?? this.userId
       ..title = title ?? this.title
       ..description = description ?? this.description
       ..priority = priority ?? this.priority
@@ -146,47 +169,50 @@ class TaskModel {
     }
   }
 
-  /// Get formatted due date string
-  String get formattedDueDate {
-    if (dueDate == null) return 'No due date';
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final due = DateTime(dueDate!.year, dueDate!.month, dueDate!.day);
-
-    final difference = due.difference(today).inDays;
-
-    if (difference == 0) return 'Today';
-    if (difference == 1) return 'Tomorrow';
-    if (difference == -1) return 'Yesterday';
-    if (difference > 0 && difference < 7) {
-      final weekdays = [
-        'Monday',
-        'Tuesday',
-        'Wednesday',
-        'Thursday',
-        'Friday',
-        'Saturday',
-        'Sunday'
-      ];
-      return weekdays[dueDate!.weekday - 1];
-    }
-
-    return '${dueDate!.day}/${dueDate!.month}/${dueDate!.year}';
+  /// Convert to Supabase-compatible format
+  Map<String, dynamic> toSupabaseMap() {
+    return {
+      'id': id.toString(),
+      'user_id': userId,
+      'title': title,
+      'description': description,
+      'priority': priority.name.toLowerCase(),
+      'category': category,
+      'due_date': dueDate?.toIso8601String(),
+      'is_completed': isCompleted,
+      'subtasks': subtasks,
+      'image_url': imagePath,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
   }
 
-  /// Get formatted due time string
-  String get formattedDueTime {
-    if (dueDate == null) return '';
-    final hour = dueDate!.hour.toString().padLeft(2, '0');
-    final minute = dueDate!.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
-  }
+  /// Create from Supabase data
+  factory TaskModel.fromSupabase(Map<String, dynamic> map) {
+    final task = TaskModel(id: map['id'] as String? ?? '')
+      ..userId = map['user_id'] as String? ?? ''
+      ..title = map['title'] as String
+      ..description = map['description'] as String?
+      ..priority =
+          PriorityExtension.fromString(map['priority'] as String? ?? 'medium')
+      ..category = map['category'] as String? ?? 'Personal'
+      ..dueDate = map['due_date'] != null
+          ? DateTime.parse(map['due_date'] as String)
+          : null
+      ..isCompleted = map['is_completed'] as bool? ?? false
+      ..subtasks = (map['subtasks'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          []
+      ..imagePath = map['image_url'] as String?
+      ..createdAt = map['created_at'] != null
+          ? DateTime.parse(map['created_at'] as String)
+          : DateTime.now()
+      ..updatedAt = map['updated_at'] != null
+          ? DateTime.parse(map['updated_at'] as String)
+          : DateTime.now();
 
-  /// Check if task is overdue
-  bool get isOverdue {
-    if (dueDate == null || isCompleted) return false;
-    return dueDate!.isBefore(DateTime.now());
+    return task;
   }
 
   /// Get completion progress for subtasks
@@ -197,11 +223,21 @@ class TaskModel {
     return isCompleted ? 1.0 : 0.0;
   }
 
-  @override
-  String toString() {
-    return 'TaskModel(id: $id, title: $title, priority: $priority, completed: $isCompleted)';
+  /// Get formatted due date for display
+  String? get formattedDueDate {
+    if (dueDate == null) return null;
+    return '${dueDate!.day.toString().padLeft(2, '0')}/${dueDate!.month.toString().padLeft(2, '0')}/${dueDate!.year}';
   }
 
+  /// Get formatted due time for display
+  String? get formattedDueTime {
+    if (dueDate == null) return null;
+    final hour = dueDate!.hour.toString().padLeft(2, '0');
+    final minute = dueDate!.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  @override
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;

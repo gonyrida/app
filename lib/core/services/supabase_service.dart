@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_auth_ui/supabase_auth_ui.dart';
 import '../config/environment_config.dart';
 
 /// SupabaseService - Centralized Supabase configuration and client
@@ -21,9 +21,9 @@ class SupabaseService {
         url: EnvironmentConfig.supabaseUrl,
         anonKey: EnvironmentConfig.supabaseAnonKey,
       );
-      
+
       _client = Supabase.instance.client;
-      
+
       if (kDebugMode) {
         print('Supabase initialized successfully');
         print('URL: ${EnvironmentConfig.supabaseUrl}');
@@ -55,11 +55,11 @@ class SupabaseService {
         email: email,
         password: password,
       );
-      
+
       if (kDebugMode) {
         print('User signed in successfully: ${response.user?.email}');
       }
-      
+
       return response;
     } catch (e) {
       if (kDebugMode) {
@@ -81,11 +81,11 @@ class SupabaseService {
         password: password,
         data: name != null ? {'name': name} : null,
       );
-      
+
       if (kDebugMode) {
         print('User signed up successfully: ${response.user?.email}');
       }
-      
+
       return response;
     } catch (e) {
       if (kDebugMode) {
@@ -99,7 +99,7 @@ class SupabaseService {
   Future<void> signOut() async {
     try {
       await _client.auth.signOut();
-      
+
       if (kDebugMode) {
         print('User signed out successfully');
       }
@@ -115,7 +115,7 @@ class SupabaseService {
   Future<void> resetPassword(String email) async {
     try {
       await _client.auth.resetPasswordForEmail(email);
-      
+
       if (kDebugMode) {
         print('Password reset email sent to: $email');
       }
@@ -127,17 +127,36 @@ class SupabaseService {
     }
   }
 
+  /// Resend email confirmation
+  Future<void> resendEmailConfirmation(String email) async {
+    try {
+      await _client.auth.resend(
+        email: email,
+        type: OtpType.signup,
+      );
+
+      if (kDebugMode) {
+        print('Email confirmation resent to: $email');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Resend confirmation error: $e');
+      }
+      rethrow;
+    }
+  }
+
   /// Update user metadata
   Future<UserResponse> updateUserMetadata(Map<String, dynamic> metadata) async {
     try {
       final response = await _client.auth.updateUser(
         UserAttributes(data: metadata),
       );
-      
+
       if (kDebugMode) {
         print('User metadata updated successfully');
       }
-      
+
       return response;
     } catch (e) {
       if (kDebugMode) {
@@ -158,15 +177,15 @@ class SupabaseService {
   }) async {
     try {
       final response = await _client.storage.from(bucket).upload(
-        path,
-        file,
-        fileOptions: const FileOptions(upsert: true),
-      );
-      
+            path,
+            file,
+            fileOptions: const FileOptions(upsert: true),
+          );
+
       if (kDebugMode) {
         print('File uploaded successfully: $response');
       }
-      
+
       return response;
     } catch (e) {
       if (kDebugMode) {
@@ -191,7 +210,7 @@ class SupabaseService {
   }) async {
     try {
       await _client.storage.from(bucket).remove([path]);
-      
+
       if (kDebugMode) {
         print('File deleted successfully: $path');
       }

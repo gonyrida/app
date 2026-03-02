@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../application/providers/task_providers.dart';
+import '../../application/task_providers.dart';
 import '../widgets/task_card.dart';
 
 /// ListScreen - Full task list with search and tabs
@@ -51,7 +51,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
   @override
   Widget build(BuildContext context) {
     final filteredTasksAsync = ref.watch(filteredTasksProvider);
-    final taskNotifier = ref.read(taskNotifierProvider.notifier);
+    final taskService = ref.read(taskServiceProvider);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -213,7 +213,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
                       return TaskCard(
                         task: task,
                         onToggle: () {
-                          taskNotifier.toggleTaskCompletion(task.id);
+                          taskService.toggleTaskCompletion(task.id);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
@@ -233,7 +233,6 @@ class _ListScreenState extends ConsumerState<ListScreen>
                           context.push('/task-detail/${task.id}', extra: task);
                         },
                       );
-
                     },
                   );
                 },

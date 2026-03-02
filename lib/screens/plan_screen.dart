@@ -39,7 +39,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allTasksAsync = ref.watch(supabaseAllTasksProvider);
+    final allTasksAsync = ref.watch(supabaseTaskListProvider);
 
     return Scaffold(
       backgroundColor: AppColors.backgroundLight,
@@ -102,8 +102,6 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
                     final dateStr = selectedDay.toIso8601String();
                     context.push('/add-task?date=$dateStr');
                   },
-
-
                   onFormatChanged: (format) {
                     setState(() {
                       _calendarFormat = format;
@@ -285,7 +283,6 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
             context.push('/add-task');
           }
         },
-
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add, color: Colors.white),
         label: Text(
@@ -302,7 +299,7 @@ class _PlanScreenState extends ConsumerState<PlanScreen> {
   /// Get tasks for a specific day
   List<TaskModel> _getTasksForDay(List<TaskModel> tasks, DateTime? day) {
     if (day == null) return [];
-    
+
     return tasks.where((task) {
       // Include tasks due on this specific day OR created on this day (for tasks without due dates)
       if (task.dueDate != null) {

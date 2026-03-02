@@ -1,5 +1,7 @@
 /// Supabase User Profile Model
 /// Matches the profiles table schema in Supabase
+part 'supabase_user_model.g.dart';
+
 class SupabaseUserModel {
   final String id;
   final String email;
@@ -116,6 +118,3 @@ class SupabaseUserModel {
   @override
   int get hashCode => id.hashCode;
 }
-
-/// Import the existing UserModel for compatibility
-import '../features/task_management/domain/models/user_model.dart';

@@ -1,8 +1,45 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/task_model.dart';
 import '../data/sample_tasks.dart';
 
 enum FilterType { all, pending, completed }
+
+// Riverpod provider for TaskProvider
+final taskProviderProvider =
+    ChangeNotifierProvider<TaskProvider>((ref) => TaskProvider());
+
+// Additional providers for convenience
+final allTasksProvider = Provider<List<TaskModel>>((ref) {
+  return ref.watch(taskProviderProvider).tasks;
+});
+
+final todaysTasksProvider = Provider<List<TaskModel>>((ref) {
+  return ref.watch(taskProviderProvider).tasks;
+});
+
+final taskStatsProvider = Provider<TaskStats>((ref) {
+  final provider = ref.watch(taskProviderProvider);
+  return TaskStats(
+    total: provider.totalTasks,
+    completed: provider.completedTasks,
+    pending: provider.pendingTasks,
+  );
+});
+
+final searchQueryProvider = StateProvider<String>((ref) => '');
+
+class TaskStats {
+  final int total;
+  final int completed;
+  final int pending;
+
+  TaskStats({
+    required this.total,
+    required this.completed,
+    required this.pending,
+  });
+}
 
 class TaskProvider extends ChangeNotifier {
   List<TaskModel> _tasks = [];
@@ -30,7 +67,7 @@ class TaskProvider extends ChangeNotifier {
   }
 
   TaskProvider() {
-    _tasks = List.from(sampleTasks);
+    _tasks = [];
   }
 
   void setQuery(String value) {
@@ -125,6 +162,7 @@ class TaskProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     } catch (e) {
+      // If fetch fails, keep current tasks or empty list
       _error = e.toString();
       _isLoading = false;
       notifyListeners();

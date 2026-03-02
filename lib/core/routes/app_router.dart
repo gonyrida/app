@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../screens/home_screen.dart';
+import '../../features/task_management/presentation/screens/home_screen.dart';
 import '../../screens/list_screen.dart';
 import '../../screens/add_task_screen.dart';
 import '../../screens/task_detail_screen.dart';
@@ -103,7 +103,8 @@ class AppRouter {
           name: 'add-task',
           builder: (context, state) {
             final dateStr = state.uri.queryParameters['date'];
-            final preselectedDate = dateStr != null ? DateTime.tryParse(dateStr) : null;
+            final preselectedDate =
+                dateStr != null ? DateTime.tryParse(dateStr) : null;
             return AddTaskScreen(preselectedDate: preselectedDate);
           },
         ),

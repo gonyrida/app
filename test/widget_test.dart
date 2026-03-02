@@ -108,6 +108,7 @@ void main() {
     testWidgets('TaskItem displays task details correctly',
         (WidgetTester tester) async {
       final testTask = TaskModel.create(
+        userId: 'test-user-id',
         title: 'Test Task',
         category: 'Development',
         priority: Priority.high,
@@ -166,7 +167,7 @@ void main() {
       // Toggle a non-completed task
       final nonCompletedTask =
           taskProvider.tasks.firstWhere((t) => !t.isCompleted);
-      taskProvider.toggleTask(nonCompletedTask.id);
+      taskProvider.toggleTask(int.tryParse(nonCompletedTask.id) ?? 0);
       await tester.pump();
 
       expect(

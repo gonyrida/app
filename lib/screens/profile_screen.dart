@@ -5,13 +5,13 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:isar/isar.dart';
 import 'package:provider/provider.dart' as provider;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/theme/app_theme.dart';
-import '../core/providers/database_provider.dart';
+import '../features/task_management/application/supabase_task_providers.dart'
+    as supabase_providers;
 import '../features/task_management/application/task_providers.dart';
-import '../features/task_management/domain/models/user_model.dart';
 import '../providers/user_session_provider.dart';
 
 /// ProfileScreen - User profile with editable info
@@ -49,6 +49,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    // Clear avatar path to prevent showing previous user's image
+    _avatarPath = null;
+
     // Load session data first, then Isar data (only for missing fields)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final hasSession = _loadSessionData();
@@ -59,6 +62,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // Clear avatar path when dependencies change (user switch)
+    _avatarPath = null;
+
     // Reload session data when dependencies change (e.g., when navigating back to this screen)
     // Then reload Isar data only for fields not in session
     final hasSession = _loadSessionData();
@@ -97,7 +103,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final statsAsync = ref.watch(taskStatsProvider);
+    // Get current user for filtering
+    final sessionProvider =
+        provider.Provider.of<UserSessionProvider>(context, listen: false);
+    final currentUserId = sessionProvider.email ?? '';
+
+    final statsAsync = ref.watch(supabase_providers.supabaseTaskStatsProvider);
 
     // Wrap with Consumer to listen to UserSessionProvider changes
     return provider.Consumer<UserSessionProvider>(
@@ -241,35 +252,45 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ],
               ),
 
-              // Stats Cards
+              // Stats Cards (filtered by current user)
               SliverToBoxAdapter(
                 child: statsAsync.when(
-                  data: (stats) => Container(
-                    margin: const EdgeInsets.all(16),
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildStatItem(
-                            'Total', stats.total.toString(), Colors.blue),
-                        _buildStatItem(
-                            'Done', stats.completed.toString(), Colors.green),
-                        _buildStatItem(
-                            'Pending', stats.pending.toString(), Colors.orange),
-                      ],
-                    ),
-                  ),
+                  data: (statsMap) {
+                    // Convert Map to TaskStats
+                    final stats = TaskStats(
+                      total: statsMap['total'] ?? 0,
+                      completed: statsMap['completed'] ?? 0,
+                      pending: statsMap['pending'] ?? 0,
+                      highPriority: statsMap['high_priority'] ?? 0,
+                    );
+
+                    return Container(
+                      margin: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildStatItem(
+                              'Total', stats.total.toString(), Colors.blue),
+                          _buildStatItem(
+                              'Done', stats.completed.toString(), Colors.green),
+                          _buildStatItem('Pending', stats.pending.toString(),
+                              Colors.orange),
+                        ],
+                      ),
+                    );
+                  },
                   loading: () => Container(
                     margin: const EdgeInsets.all(16),
                     height: 100,
@@ -708,40 +729,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  /// Save profile to Isar database
+  /// Save profile to SharedPreferences
   Future<void> _saveProfile() async {
     try {
-      final isar = await ref.read(databaseProvider.future);
-
       // Validate email format
       if (!_emailController.text.contains('@')) {
         throw Exception('Please enter a valid email address');
       }
 
-      // Create or update user profile
-      final user = UserModel()
-        ..name = _nameController.text.trim()
-        ..email = _emailController.text.trim()
-        ..phone = _phoneController.text.trim()
-        ..location = _locationController.text.trim()
-        ..bio = _bioController.text.trim()
-        ..avatarPath = _avatarPath
-        ..updatedAt = DateTime.now()
-        ..themeMode = _darkMode ? 'dark' : 'light'
-        ..notificationsEnabled = _notifications;
+      final prefs = await SharedPreferences.getInstance();
 
-      // Check if user exists
-      final existingUser = await isar.userModels.where().findFirst();
-
-      await isar.writeTxn(() async {
-        if (existingUser != null) {
-          user.id = existingUser.id;
-          await isar.userModels.put(user);
-        } else {
-          user.createdAt = DateTime.now();
-          await isar.userModels.put(user);
-        }
-      });
+      // Save profile data
+      await prefs.setString('profile_name', _nameController.text.trim());
+      await prefs.setString('profile_email', _emailController.text.trim());
+      await prefs.setString('profile_phone', _phoneController.text.trim());
+      await prefs.setString(
+          'profile_location', _locationController.text.trim());
+      await prefs.setString('profile_bio', _bioController.text.trim());
+      if (_avatarPath != null) {
+        await prefs.setString('profile_avatar', _avatarPath!);
+      }
+      await prefs.setBool('profile_dark_mode', _darkMode);
+      await prefs.setBool('profile_notifications', _notifications);
 
       // Update session provider with new profile data
       final sessionProvider =
@@ -785,36 +794,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  /// Load profile from Isar database
+  /// Load profile from SharedPreferences
   /// Only loads fields that are not already set from session
   Future<void> _loadProfile(bool hasSessionData) async {
     try {
-      final isar = await ref.read(databaseProvider.future);
+      final prefs = await SharedPreferences.getInstance();
 
-      final user = await isar.userModels.where().findFirst();
-
-      if (user != null && mounted) {
+      if (mounted) {
         setState(() {
-          // Only load from Isar if session data wasn't available
+          // Only load from SharedPreferences if session data wasn't available
           if (!hasSessionData) {
             _nameController.text =
-                user.name.isNotEmpty ? user.name : 'Chinit Hem';
+                prefs.getString('profile_name') ?? 'Chinit Hem';
             _emailController.text =
-                user.email.isNotEmpty ? user.email : 'chinithem81@gmail.com';
-            _phoneController.text = (user.phone?.isNotEmpty ?? false)
-                ? user.phone!
-                : '+855 011 311 161';
+                prefs.getString('profile_email') ?? 'chinithem81@gmail.com';
+            _phoneController.text =
+                prefs.getString('profile_phone') ?? '+855 011 311 161';
           }
-          // These fields are always loaded from Isar (not in session)
-          _locationController.text = (user.location?.isNotEmpty ?? false)
-              ? user.location!
-              : 'Phnom Penh, Cambodia';
-          _bioController.text = (user.bio?.isNotEmpty ?? false)
-              ? user.bio!
-              : 'Flutter developer. Love building beautiful and productive apps!';
-          _avatarPath = user.avatarPath;
-          _darkMode = user.themeMode == 'dark';
-          _notifications = user.notificationsEnabled;
+          // These fields are always loaded from SharedPreferences (not in session)
+          _locationController.text =
+              prefs.getString('profile_location') ?? 'Phnom Penh, Cambodia';
+          _bioController.text = prefs.getString('profile_bio') ??
+              'Flutter developer. Love building beautiful and productive apps!';
+          _avatarPath = prefs.getString('profile_avatar');
+          _darkMode = prefs.getBool('profile_dark_mode') ?? false;
+          _notifications = prefs.getBool('profile_notifications') ?? true;
         });
       }
     } catch (e) {

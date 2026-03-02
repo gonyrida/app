@@ -1,26 +1,49 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:isar/isar.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../../../core/providers/database_provider.dart';
+import '../data/repositories/supabase_task_repository.dart';
 import '../domain/models/task_model.dart';
+import '../../../../core/services/supabase_service.dart';
 
 part 'task_providers.g.dart';
 
-/// Provider for all tasks from Isar database
+/// Provider for Supabase task repository
 @riverpod
-Stream<List<TaskModel>> allTasks(AllTasksRef ref) async* {
-  final isar = await ref.watch(databaseProvider.future);
+SupabaseTaskRepository supabaseTaskRepository(SupabaseTaskRepositoryRef ref) {
+  return SupabaseTaskRepository();
+}
 
-  // Watch for changes in the TaskModel collection
-  final query = isar.taskModels.where().watch(fireImmediately: true);
+/// Provider for all tasks from Supabase
+@riverpod
+Future<List<TaskModel>> allTasks(AllTasksRef ref) async {
+  final repository = ref.watch(supabaseTaskRepositoryProvider);
+  final currentUserId = SupabaseService.instance.currentUserId;
 
-  await for (final tasks in query) {
+  if (currentUserId == null) {
     if (kDebugMode) {
-      print('All tasks updated: ${tasks.length} tasks');
+      print('User not authenticated - returning empty task list');
     }
-    yield tasks;
+    return [];
+  }
+
+  try {
+    final tasks = await repository.getAllTasks();
+
+    // Double-filter tasks by user ID for additional security
+    final userTasks =
+        tasks.where((task) => task.userId == currentUserId).toList();
+
+    if (kDebugMode) {
+      print(
+          'All tasks loaded for user $currentUserId: ${userTasks.length} tasks');
+    }
+    return userTasks;
+  } catch (e) {
+    if (kDebugMode) {
+      print('Error loading all tasks: $e');
+    }
+    return [];
   }
 }
 
@@ -31,129 +54,256 @@ Future<List<TaskModel>> filteredTasks(
   required TaskFilter filter,
   String searchQuery = '',
 }) async {
-  final isar = await ref.watch(databaseProvider.future);
+  final repository = ref.watch(supabaseTaskRepositoryProvider);
+  final currentUserId = SupabaseService.instance.currentUserId;
 
-  // Build query based on filter
-  Query<TaskModel> query;
-
-  switch (filter) {
-    case TaskFilter.pending:
-      query = isar.taskModels.filter().isCompletedEqualTo(false).build();
-      break;
-    case TaskFilter.completed:
-      query = isar.taskModels.filter().isCompletedEqualTo(true).build();
-      break;
-    case TaskFilter.all:
-    default:
-      query = isar.taskModels.where().build();
-      break;
+  if (currentUserId == null) {
+    if (kDebugMode) {
+      print('User not authenticated - returning empty filtered task list');
+    }
+    return [];
   }
 
-  final tasks = await query.findAll();
+  try {
+    List<TaskModel> tasks;
 
-  // Apply search filter if provided
-  if (searchQuery.isNotEmpty) {
-    final lowerQuery = searchQuery.toLowerCase();
-    return tasks.where((task) {
-      return task.title.toLowerCase().contains(lowerQuery) ||
-          (task.description?.toLowerCase().contains(lowerQuery) ?? false) ||
-          task.category.toLowerCase().contains(lowerQuery);
-    }).toList();
+    // Get tasks based on filter
+    switch (filter) {
+      case TaskFilter.pending:
+        tasks = await repository.getTasksByStatus(isCompleted: false);
+        break;
+      case TaskFilter.completed:
+        tasks = await repository.getTasksByStatus(isCompleted: true);
+        break;
+      case TaskFilter.all:
+      default:
+        tasks = await repository.getAllTasks();
+        break;
+    }
+
+    // Apply search filter if provided
+    if (searchQuery.isNotEmpty) {
+      tasks = await repository.searchTasks(searchQuery);
+    }
+
+    // Double-filter tasks by user ID for additional security
+    final userTasks =
+        tasks.where((task) => task.userId == currentUserId).toList();
+
+    // Sort by priority (high -> medium -> low) and then by due date
+    userTasks.sort((a, b) {
+      // First sort by completion (pending first)
+      if (a.isCompleted != b.isCompleted) {
+        return a.isCompleted ? 1 : -1;
+      }
+
+      // Then by priority (high = 2, medium = 1, low = 0)
+      final priorityCompare = b.priority.index.compareTo(a.priority.index);
+      if (priorityCompare != 0) return priorityCompare;
+
+      // Then by due date (earlier first)
+      if (a.dueDate != null && b.dueDate != null) {
+        return a.dueDate!.compareTo(b.dueDate!);
+      }
+      if (a.dueDate != null) return -1;
+      if (b.dueDate != null) return 1;
+
+      return 0;
+    });
+
+    return userTasks;
+  } catch (e) {
+    if (kDebugMode) {
+      print('Error loading filtered tasks: $e');
+    }
+    return [];
   }
-
-  // Sort by priority (high -> medium -> low) and then by due date
-  tasks.sort((a, b) {
-    // First sort by completion (pending first)
-    if (a.isCompleted != b.isCompleted) {
-      return a.isCompleted ? 1 : -1;
-    }
-
-    // Then by priority (high = 2, medium = 1, low = 0)
-    final priorityCompare = b.priority.index.compareTo(a.priority.index);
-    if (priorityCompare != 0) return priorityCompare;
-
-    // Then by due date (earlier first)
-    if (a.dueDate != null && b.dueDate != null) {
-      return a.dueDate!.compareTo(b.dueDate!);
-    }
-    if (a.dueDate != null) return -1;
-    if (b.dueDate != null) return 1;
-
-    return 0;
-  });
-
-  return tasks;
 }
 
 /// Provider for today's tasks
 @riverpod
 Future<List<TaskModel>> todaysTasks(TodaysTasksRef ref) async {
-  final isar = await ref.watch(databaseProvider.future);
+  final repository = ref.watch(supabaseTaskRepositoryProvider);
+  final currentUserId = SupabaseService.instance.currentUserId;
 
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final tomorrow = today.add(const Duration(days: 1));
+  if (currentUserId == null) {
+    if (kDebugMode) {
+      print('User not authenticated - returning empty today task list');
+    }
+    return [];
+  }
 
-  return await isar.taskModels
-      .filter()
-      .isCompletedEqualTo(false)
-      .dueDateBetween(today, tomorrow)
-      .findAll();
+  try {
+    final allTasks = await repository.getAllTasks();
+
+    // Double-filter tasks by user ID for additional security
+    final userTasks =
+        allTasks.where((task) => task.userId == currentUserId).toList();
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+
+    if (kDebugMode) {
+      print(
+          'DEBUG: Total tasks loaded for user $currentUserId: ${userTasks.length}');
+      print('DEBUG: Today: $today, Tomorrow: $tomorrow');
+    }
+
+    final todayTasksList = userTasks.where((task) {
+      if (task.isCompleted) return false;
+      if (task.dueDate == null) return false;
+
+      final taskDate = DateTime(
+        task.dueDate!.year,
+        task.dueDate!.month,
+        task.dueDate!.day,
+      );
+
+      final isToday = taskDate.isAtSameMomentAs(today) ||
+          taskDate.isAtSameMomentAs(tomorrow);
+
+      if (kDebugMode) {
+        print(
+            'DEBUG: Today task check - Task ID: ${task.id}, Due: ${task.dueDate}, IsToday: $isToday');
+      }
+
+      return isToday;
+    }).toList();
+
+    if (kDebugMode) {
+      print('DEBUG: Today\'s tasks found: ${todayTasksList.length}');
+    }
+
+    return todayTasksList;
+  } catch (e) {
+    if (kDebugMode) {
+      print('Error loading today\'s tasks: $e');
+    }
+    return [];
+  }
 }
 
 /// Provider for task statistics
 @riverpod
 Future<TaskStats> taskStats(TaskStatsRef ref) async {
-  final isar = await ref.watch(databaseProvider.future);
+  final repository = ref.watch(supabaseTaskRepositoryProvider);
+  final currentUserId = SupabaseService.instance.currentUserId;
 
-  final total = await isar.taskModels.count();
-  final completed =
-      await isar.taskModels.filter().isCompletedEqualTo(true).count();
-  final pending = total - completed;
+  if (currentUserId == null) {
+    if (kDebugMode) {
+      print('User not authenticated - returning empty task stats');
+    }
+    return const TaskStats(
+      total: 0,
+      completed: 0,
+      pending: 0,
+      highPriority: 0,
+    );
+  }
 
-  // High priority pending tasks
-  final highPriority = await isar.taskModels
-      .filter()
-      .isCompletedEqualTo(false)
-      .priorityEqualTo(Priority.high)
-      .count();
+  try {
+    // Get all tasks and calculate stats locally instead of using database view
+    final allTasks = await repository.getAllTasks();
 
-  return TaskStats(
-    total: total,
-    completed: completed,
-    pending: pending,
-    highPriority: highPriority,
-  );
+    // Double-filter tasks by user ID for additional security
+    final userTasks =
+        allTasks.where((task) => task.userId == currentUserId).toList();
+
+    if (kDebugMode) {
+      print(
+          'DEBUG: Calculating stats from ${userTasks.length} tasks for user $currentUserId');
+    }
+
+    final total = userTasks.length;
+    final completed = userTasks.where((task) => task.isCompleted).length;
+    final pending = userTasks.where((task) => !task.isCompleted).length;
+    final highPriority = userTasks
+        .where((task) => task.priority == Priority.high && !task.isCompleted)
+        .length;
+
+    final stats = {
+      'total': total,
+      'completed': completed,
+      'pending': pending,
+      'high_priority': highPriority,
+    };
+
+    if (kDebugMode) {
+      print('DEBUG: Task stats calculated: $stats');
+    }
+
+    return TaskStats(
+      total: stats['total'] ?? 0,
+      completed: stats['completed'] ?? 0,
+      pending: stats['pending'] ?? 0,
+      highPriority: stats['high_priority'] ?? 0,
+    );
+  } catch (e) {
+    if (kDebugMode) {
+      print('Error loading task stats: $e');
+    }
+    return const TaskStats(
+      total: 0,
+      completed: 0,
+      pending: 0,
+      highPriority: 0,
+    );
+  }
 }
 
 /// Provider for a single task by ID
 @riverpod
-Future<TaskModel?> taskById(TaskByIdRef ref, int id) async {
-  final isar = await ref.watch(databaseProvider.future);
-  return await isar.taskModels.get(id);
+Future<TaskModel?> taskById(TaskByIdRef ref, String id) async {
+  final repository = ref.watch(supabaseTaskRepositoryProvider);
+
+  try {
+    return await repository.getTaskById(id);
+  } catch (e) {
+    if (kDebugMode) {
+      print('Error loading task by ID: $e');
+    }
+    return null;
+  }
 }
 
-/// Notifier for task operations (add, update, delete)
-@riverpod
-class TaskNotifier extends _$TaskNotifier {
-  @override
-  Future<void> build() async {
-    // Initial state - nothing to do
-    return;
-  }
+/// Service for task operations (add, update, delete)
+class TaskService {
+  final Ref ref;
 
-  /// Add a new task to Isar
+  TaskService(this.ref);
+
+  /// Add a new task to Supabase
   Future<bool> addTask(TaskModel task) async {
-    final isar = await ref.read(databaseProvider.future);
-
     try {
-      await isar.writeTxn(() async {
-        await isar.taskModels.put(task);
-      });
+      final repository = ref.read(supabaseTaskRepositoryProvider);
+      final currentUserId = SupabaseService.instance.currentUserId;
+
+      if (currentUserId == null) {
+        if (kDebugMode) {
+          print('ERROR: User not authenticated - cannot add task');
+        }
+        return false;
+      }
+
+      // Ensure task has correct user ID
+      if (task.userId != currentUserId) {
+        task.userId = currentUserId;
+      }
+
+      // Debug: Log the task operation (without sensitive data)
+      if (kDebugMode) {
+        print('DEBUG: Creating task with priority: ${task.priority.name}');
+        print('DEBUG: Task category: ${task.category}');
+      }
+
+      await repository.createTask(task);
 
       // Invalidate related providers to refresh UI
       ref.invalidate(allTasksProvider);
       ref.invalidate(taskStatsProvider);
+      ref.invalidate(filteredTasksProvider);
+      ref.invalidate(todaysTasksProvider);
 
       return true;
     } catch (e, stackTrace) {
@@ -164,22 +314,18 @@ class TaskNotifier extends _$TaskNotifier {
     }
   }
 
-
   /// Update an existing task
   Future<bool> updateTask(TaskModel task) async {
-    final isar = await ref.read(databaseProvider.future);
-
     try {
-      task.updatedAt = DateTime.now();
-
-      await isar.writeTxn(() async {
-        await isar.taskModels.put(task);
-      });
+      final repository = ref.read(supabaseTaskRepositoryProvider);
+      await repository.updateTask(task);
 
       // Invalidate related providers
       ref.invalidate(allTasksProvider);
       ref.invalidate(taskStatsProvider);
       ref.invalidate(taskByIdProvider(task.id));
+      ref.invalidate(filteredTasksProvider);
+      ref.invalidate(todaysTasksProvider);
 
       return true;
     } catch (e) {
@@ -191,22 +337,17 @@ class TaskNotifier extends _$TaskNotifier {
   }
 
   /// Toggle task completion status
-  Future<bool> toggleTaskCompletion(int taskId) async {
-    final isar = await ref.read(databaseProvider.future);
-
+  Future<bool> toggleTaskCompletion(String taskId) async {
     try {
-      await isar.writeTxn(() async {
-        final task = await isar.taskModels.get(taskId);
-        if (task != null) {
-          task.toggleComplete();
-          await isar.taskModels.put(task);
-        }
-      });
+      final repository = ref.read(supabaseTaskRepositoryProvider);
+      await repository.toggleTaskCompletion(taskId);
 
       // Invalidate related providers
       ref.invalidate(allTasksProvider);
       ref.invalidate(taskStatsProvider);
       ref.invalidate(taskByIdProvider(taskId));
+      ref.invalidate(filteredTasksProvider);
+      ref.invalidate(todaysTasksProvider);
 
       return true;
     } catch (e) {
@@ -218,17 +359,16 @@ class TaskNotifier extends _$TaskNotifier {
   }
 
   /// Delete a task
-  Future<bool> deleteTask(int taskId) async {
-    final isar = await ref.read(databaseProvider.future);
-
+  Future<bool> deleteTask(String taskId) async {
     try {
-      await isar.writeTxn(() async {
-        await isar.taskModels.delete(taskId);
-      });
+      final repository = ref.read(supabaseTaskRepositoryProvider);
+      await repository.deleteTask(taskId);
 
       // Invalidate related providers
       ref.invalidate(allTasksProvider);
       ref.invalidate(taskStatsProvider);
+      ref.invalidate(filteredTasksProvider);
+      ref.invalidate(todaysTasksProvider);
 
       return true;
     } catch (e) {
@@ -237,6 +377,132 @@ class TaskNotifier extends _$TaskNotifier {
       }
       return false;
     }
+  }
+
+  /// Refresh all tasks
+  Future<void> refreshTasks() async {
+    ref.invalidate(allTasksProvider);
+    ref.invalidate(taskStatsProvider);
+    ref.invalidate(filteredTasksProvider);
+    ref.invalidate(todaysTasksProvider);
+  }
+
+  /// Clear all cached task data (call this on user logout)
+  void clearAllTaskData() {
+    ref.invalidate(allTasksProvider);
+    ref.invalidate(taskStatsProvider);
+    ref.invalidate(filteredTasksProvider);
+    ref.invalidate(todaysTasksProvider);
+
+    // Invalidate all taskById providers
+    // Note: Riverpod doesn't provide a way to invalidate all family providers at once
+    // This will be handled by the individual task invalidations above
+
+    if (kDebugMode) {
+      print('All task data cleared from cache');
+    }
+  }
+}
+
+/// Notifier for task operations (add, update, delete)
+class TaskNotifier extends Notifier<List<TaskModel>> {
+  @override
+  List<TaskModel> build() {
+    return [];
+  }
+
+  /// Add a new task to Supabase
+  Future<bool> addTask(TaskModel task) async {
+    try {
+      final repository = ref.read(supabaseTaskRepositoryProvider);
+      await repository.createTask(task);
+
+      // Invalidate related providers to refresh UI
+      ref.invalidate(allTasksProvider);
+      ref.invalidate(taskStatsProvider);
+      ref.invalidate(filteredTasksProvider);
+      ref.invalidate(todaysTasksProvider);
+
+      return true;
+    } catch (e, stackTrace) {
+      // Log error in all modes for debugging
+      print('ERROR adding task: $e');
+      print('Stack trace: $stackTrace');
+      return false;
+    }
+  }
+
+  /// Update an existing task
+  Future<bool> updateTask(TaskModel task) async {
+    try {
+      final repository = ref.read(supabaseTaskRepositoryProvider);
+      await repository.updateTask(task);
+
+      // Invalidate related providers
+      ref.invalidate(allTasksProvider);
+      ref.invalidate(taskStatsProvider);
+      ref.invalidate(taskByIdProvider(task.id));
+      ref.invalidate(filteredTasksProvider);
+      ref.invalidate(todaysTasksProvider);
+
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error updating task: $e');
+      }
+      return false;
+    }
+  }
+
+  /// Toggle task completion status
+  Future<bool> toggleTaskCompletion(String taskId) async {
+    try {
+      final repository = ref.read(supabaseTaskRepositoryProvider);
+      await repository.toggleTaskCompletion(taskId);
+
+      // Invalidate related providers
+      ref.invalidate(allTasksProvider);
+      ref.invalidate(taskStatsProvider);
+      ref.invalidate(taskByIdProvider(taskId));
+      ref.invalidate(filteredTasksProvider);
+      ref.invalidate(todaysTasksProvider);
+
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error toggling task: $e');
+      }
+      return false;
+    }
+  }
+
+  /// Delete a task
+  Future<bool> deleteTask(String taskId) async {
+    try {
+      final repository = ref.read(supabaseTaskRepositoryProvider);
+      await repository.deleteTask(taskId);
+
+      // Invalidate related providers
+      ref.invalidate(allTasksProvider);
+      ref.invalidate(taskStatsProvider);
+      ref.invalidate(filteredTasksProvider);
+      ref.invalidate(todaysTasksProvider);
+
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error deleting task: $e');
+      }
+      return false;
+    }
+  }
+
+  /// Refresh all tasks
+  Future<void> refreshTasks() async {
+    ref.invalidate(allTasksProvider);
+    ref.invalidate(taskStatsProvider);
+    ref.invalidate(filteredTasksProvider);
+    ref.invalidate(todaysTasksProvider);
   }
 }
 
@@ -269,9 +535,14 @@ class TaskStats {
   }
 }
 
-/// Search query provider (for UI state)
-final searchQueryProvider = StateProvider<String>((ref) => '');
+/// Task Service provider
+@riverpod
+TaskService taskService(TaskServiceRef ref) {
+  return TaskService(ref);
+}
 
-/// Selected filter provider (for UI state)
-final selectedFilterProvider =
-    StateProvider<TaskFilter>((ref) => TaskFilter.all);
+/// Task Notifier provider
+@riverpod
+TaskNotifier taskNotifier(AutoDisposeProviderRef<TaskNotifier> ref) {
+  return TaskNotifier();
+}

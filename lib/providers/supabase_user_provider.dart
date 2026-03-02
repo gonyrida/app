@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:provider/provider.dart' as provider;
+import 'package:provider/provider.dart' as provider_pkg;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/repositories/supabase_user_repository.dart';
 import '../data/models/supabase_user_model.dart';
 import '../features/task_management/domain/models/user_model.dart';
@@ -14,13 +16,15 @@ final supabaseUserRepositoryProvider = Provider<SupabaseUserRepository>((ref) {
 });
 
 /// Current user profile provider
-final supabaseUserProfileProvider = FutureProvider<SupabaseUserModel?>((ref) async {
+final supabaseUserProfileProvider =
+    FutureProvider<SupabaseUserModel?>((ref) async {
   final repository = ref.read(supabaseUserRepositoryProvider);
   return await repository.getCurrentUserProfile();
 });
 
 /// User profile stream provider for real-time updates
-final supabaseUserProfileStreamProvider = StreamProvider<SupabaseUserModel?>((ref) {
+final supabaseUserProfileStreamProvider =
+    StreamProvider<SupabaseUserModel?>((ref) {
   final repository = ref.read(supabaseUserRepositoryProvider);
   return repository.watchUserProfile();
 });
@@ -80,6 +84,11 @@ class SupabaseUserService {
     await SupabaseService.instance.resetPassword(email);
   }
 
+  /// Resend email confirmation
+  Future<void> resendEmailConfirmation(String email) async {
+    await SupabaseService.instance.resendEmailConfirmation(email);
+  }
+
   /// Get current user profile
   Future<UserModel?> getCurrentUserProfile() async {
     final profile = await _repository.getCurrentUserProfile();
@@ -118,6 +127,11 @@ class SupabaseUserService {
     await _repository.deleteAvatar(avatarUrl);
   }
 
+  /// Update user metadata (for compatibility with enhanced security settings)
+  Future<void> updateUserMetadata(Map<String, dynamic> metadata) async {
+    await SupabaseService.instance.updateUserMetadata(metadata);
+  }
+
   /// Check if user profile exists
   Future<bool> userProfileExists() async {
     return await _repository.userProfileExists();
@@ -139,7 +153,7 @@ class SupabaseUserService {
       createdAt: user.createdAt,
       updatedAt: DateTime.now(),
     );
-    
+
     final savedProfile = await _repository.saveUserProfile(supabaseUser);
     return savedProfile.toLocalModel();
   }
@@ -153,7 +167,7 @@ final supabaseUserServiceProvider = Provider<SupabaseUserService>((ref) {
 
 /// Bridge provider for compatibility with existing UserSessionProvider
 /// This maintains the same interface while using Supabase backend
-class SupabaseUserSessionProvider extends provider.ChangeNotifier {
+class SupabaseUserSessionProvider extends ChangeNotifier {
   final SupabaseUserService _userService;
   String? _email;
   String? _name;
@@ -173,18 +187,18 @@ class SupabaseUserSessionProvider extends provider.ChangeNotifier {
     if (currentUser != null) {
       _email = currentUser.email;
       _isLoggedIn = true;
-      
+
       // Clear previous session data first
       _name = null;
       _phone = null;
-      
+
       // Load fresh profile data for current user
       final profile = await _userService.getCurrentUserProfile();
       if (profile != null) {
         _name = profile.name;
         _phone = profile.phone;
       }
-      
+
       notifyListeners();
     } else {
       // Clear all session data when no user is logged in
@@ -224,11 +238,11 @@ class SupabaseUserSessionProvider extends provider.ChangeNotifier {
       name: name,
       phone: phone,
     );
-    
+
     if (name != null) _name = name;
     if (phone != null) _phone = phone;
     if (email != null) _email = email;
-    
+
     notifyListeners();
   }
 
@@ -240,10 +254,11 @@ class SupabaseUserSessionProvider extends provider.ChangeNotifier {
 }
 
 /// Supabase session provider
-final supabaseSessionProvider = provider.Provider<SupabaseUserSessionProvider>((ref) {
-  final userService = ref.read(supabaseUserServiceProvider);
-  return SupabaseUserSessionProvider(userService);
-});
-
-/// Import required types
-import 'package:supabase_flutter/supabase_flutter.dart';
+final supabaseSessionProvider =
+    provider_pkg.ChangeNotifierProvider<SupabaseUserSessionProvider>(
+  create: (_) {
+    final repository = SupabaseUserRepository();
+    final userService = SupabaseUserService(repository);
+    return SupabaseUserSessionProvider(userService);
+  },
+);

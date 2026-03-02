@@ -28,12 +28,24 @@ class UserSessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Clear all user data from SharedPreferences
+  Future<void> _clearAllUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('user_email');
+    await prefs.remove('user_name');
+    await prefs.remove('user_phone');
+    await prefs.remove('is_logged_in');
+  }
+
   /// Save user session after login/signup
   Future<void> saveSession({
     required String email,
     String? name,
     String? phone,
   }) async {
+    // Clear any previous user data first
+    await _clearAllUserData();
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('user_email', email);
     if (name != null) await prefs.setString('user_name', name);

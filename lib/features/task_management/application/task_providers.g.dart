@@ -6,13 +6,33 @@ part of 'task_providers.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$allTasksHash() => r'4d81f810f3a98b5e0b74dc03e1de4ab352bf0165';
+String _$supabaseTaskRepositoryHash() =>
+    r'c697b4fe18ce834a3568ef63f298d3f48e34802a';
 
-/// Provider for all tasks from Isar database
+/// Provider for Supabase task repository
+///
+/// Copied from [supabaseTaskRepository].
+@ProviderFor(supabaseTaskRepository)
+final supabaseTaskRepositoryProvider =
+    AutoDisposeProvider<SupabaseTaskRepository>.internal(
+  supabaseTaskRepository,
+  name: r'supabaseTaskRepositoryProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$supabaseTaskRepositoryHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+typedef SupabaseTaskRepositoryRef
+    = AutoDisposeProviderRef<SupabaseTaskRepository>;
+String _$allTasksHash() => r'06651a17cb3384b39b6b1c398920253b14e0e947';
+
+/// Provider for all tasks from Supabase
 ///
 /// Copied from [allTasks].
 @ProviderFor(allTasks)
-final allTasksProvider = AutoDisposeStreamProvider<List<TaskModel>>.internal(
+final allTasksProvider = AutoDisposeFutureProvider<List<TaskModel>>.internal(
   allTasks,
   name: r'allTasksProvider',
   debugGetCreateSourceHash:
@@ -21,8 +41,8 @@ final allTasksProvider = AutoDisposeStreamProvider<List<TaskModel>>.internal(
   allTransitiveDependencies: null,
 );
 
-typedef AllTasksRef = AutoDisposeStreamProviderRef<List<TaskModel>>;
-String _$filteredTasksHash() => r'043b081bfc2fc0e2fe743f213f35224545fd9a12';
+typedef AllTasksRef = AutoDisposeFutureProviderRef<List<TaskModel>>;
+String _$filteredTasksHash() => r'ebbb49bc256ada00640bbea16d56882f4cd43368';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -201,7 +221,7 @@ class _FilteredTasksProviderElement
   String get searchQuery => (origin as FilteredTasksProvider).searchQuery;
 }
 
-String _$todaysTasksHash() => r'a7022f144f996d21910fbc444779d6a02acd3454';
+String _$todaysTasksHash() => r'86113d699187d8935fb65bbf1f1b8aec433210d5';
 
 /// Provider for today's tasks
 ///
@@ -217,7 +237,7 @@ final todaysTasksProvider = AutoDisposeFutureProvider<List<TaskModel>>.internal(
 );
 
 typedef TodaysTasksRef = AutoDisposeFutureProviderRef<List<TaskModel>>;
-String _$taskStatsHash() => r'afe1591af7247785fe3757090b21a9e81c16874e';
+String _$taskStatsHash() => r'7349e4d95aa92200194b626637aaa4838fbf2c2d';
 
 /// Provider for task statistics
 ///
@@ -233,7 +253,7 @@ final taskStatsProvider = AutoDisposeFutureProvider<TaskStats>.internal(
 );
 
 typedef TaskStatsRef = AutoDisposeFutureProviderRef<TaskStats>;
-String _$taskByIdHash() => r'91a5b80210f0a7a0d9a8c7725c14fd7f01ebc969';
+String _$taskByIdHash() => r'0e8729e3062c125a427db80e5961544a9aec9b97';
 
 /// Provider for a single task by ID
 ///
@@ -254,7 +274,7 @@ class TaskByIdFamily extends Family<AsyncValue<TaskModel?>> {
   ///
   /// Copied from [taskById].
   TaskByIdProvider call(
-    int id,
+    String id,
   ) {
     return TaskByIdProvider(
       id,
@@ -293,7 +313,7 @@ class TaskByIdProvider extends AutoDisposeFutureProvider<TaskModel?> {
   ///
   /// Copied from [taskById].
   TaskByIdProvider(
-    int id,
+    String id,
   ) : this._internal(
           (ref) => taskById(
             ref as TaskByIdRef,
@@ -320,7 +340,7 @@ class TaskByIdProvider extends AutoDisposeFutureProvider<TaskModel?> {
     required this.id,
   }) : super.internal();
 
-  final int id;
+  final String id;
 
   @override
   Override overrideWith(
@@ -361,7 +381,7 @@ class TaskByIdProvider extends AutoDisposeFutureProvider<TaskModel?> {
 
 mixin TaskByIdRef on AutoDisposeFutureProviderRef<TaskModel?> {
   /// The parameter `id` of this provider.
-  int get id;
+  String get id;
 }
 
 class _TaskByIdProviderElement
@@ -369,18 +389,33 @@ class _TaskByIdProviderElement
   _TaskByIdProviderElement(super.provider);
 
   @override
-  int get id => (origin as TaskByIdProvider).id;
+  String get id => (origin as TaskByIdProvider).id;
 }
 
-String _$taskNotifierHash() => r'64a21322869a99ae2cd44c6a93e918bf6c05152e';
+String _$taskServiceHash() => r'33aada9249143a467a2690c7d7c872ca52518863';
 
-/// Notifier for task operations (add, update, delete)
+/// Task Service provider
 ///
-/// Copied from [TaskNotifier].
-@ProviderFor(TaskNotifier)
-final taskNotifierProvider =
-    AutoDisposeAsyncNotifierProvider<TaskNotifier, void>.internal(
-  TaskNotifier.new,
+/// Copied from [taskService].
+@ProviderFor(taskService)
+final taskServiceProvider = AutoDisposeProvider<TaskService>.internal(
+  taskService,
+  name: r'taskServiceProvider',
+  debugGetCreateSourceHash:
+      const bool.fromEnvironment('dart.vm.product') ? null : _$taskServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+typedef TaskServiceRef = AutoDisposeProviderRef<TaskService>;
+String _$taskNotifierHash() => r'3c41f70c458e7134fda54bf205714303aa7521b9';
+
+/// Task Notifier provider
+///
+/// Copied from [taskNotifier].
+@ProviderFor(taskNotifier)
+final taskNotifierProvider = AutoDisposeProvider<TaskNotifier>.internal(
+  taskNotifier,
   name: r'taskNotifierProvider',
   debugGetCreateSourceHash:
       const bool.fromEnvironment('dart.vm.product') ? null : _$taskNotifierHash,
@@ -388,6 +423,6 @@ final taskNotifierProvider =
   allTransitiveDependencies: null,
 );
 
-typedef _$TaskNotifier = AutoDisposeAsyncNotifier<void>;
+typedef TaskNotifierRef = AutoDisposeProviderRef<TaskNotifier>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

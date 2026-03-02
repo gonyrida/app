@@ -9,6 +9,11 @@ import '../features/task_management/domain/models/task_model.dart';
 import '../features/task_management/presentation/widgets/task_card.dart';
 import '../widgets/search_bar.dart' as app_search;
 
+// Providers for search and filter state
+final selectedFilterProvider =
+    StateProvider<TaskFilter>((ref) => TaskFilter.all);
+final searchQueryProvider = StateProvider<String>((ref) => '');
+
 /// ListScreen - Task list with search and filter tabs
 ///
 /// Features:
@@ -190,9 +195,8 @@ class _ListScreenState extends ConsumerState<ListScreen>
 
   /// Toggle task completion
   Future<void> _toggleTask(TaskModel task) async {
-    final success = await ref
-        .read(taskNotifierProvider.notifier)
-        .toggleTaskCompletion(task.id);
+    final taskService = ref.read(taskServiceProvider);
+    final success = await taskService.toggleTaskCompletion(task.id);
 
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -207,9 +211,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
             label: 'UNDO',
             textColor: Colors.white,
             onPressed: () async {
-              await ref
-                  .read(taskNotifierProvider.notifier)
-                  .toggleTaskCompletion(task.id);
+              await ref.read(taskServiceProvider).toggleTaskCompletion(task.id);
             },
           ),
         ),

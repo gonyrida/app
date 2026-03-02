@@ -4,6 +4,7 @@ import 'package:provider/provider.dart' as provider;
 import 'package:go_router/go_router.dart';
 import '../providers/supabase_user_provider.dart';
 import '../features/task_management/application/supabase_task_providers.dart';
+import '../features/task_management/application/task_providers.dart';
 import '../features/task_management/domain/models/task_model.dart';
 import '../core/services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -13,7 +14,8 @@ class SupabaseProfileScreen extends ConsumerStatefulWidget {
   const SupabaseProfileScreen({super.key});
 
   @override
-  ConsumerState<SupabaseProfileScreen> createState() => _SupabaseProfileScreenState();
+  ConsumerState<SupabaseProfileScreen> createState() =>
+      _SupabaseProfileScreenState();
 }
 
 class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
@@ -31,12 +33,12 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
   @override
   void initState() {
     super.initState();
-    
+
     // Force refresh when screen is opened
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadProfileData();
     });
-    
+
     // Listen to auth state changes to refresh profile
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.listen(supabaseAuthProvider, (previous, next) {
@@ -61,14 +63,14 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
       _darkMode = false;
       _notifications = true;
     });
-    
+
     final userService = ref.read(supabaseUserServiceProvider);
     final profile = await userService.getCurrentUserProfile();
-    
+
     if (profile != null && mounted) {
       debugPrint('Loading profile data for user: ${profile.email}');
       debugPrint('Avatar URL from database: ${profile.avatarPath}');
-      
+
       setState(() {
         _nameController.text = profile.name;
         _emailController.text = profile.email;
@@ -79,7 +81,7 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
         _darkMode = profile.themeMode == 'dark';
         _notifications = profile.notificationsEnabled;
       });
-      
+
       debugPrint('Avatar URL set in state: $_avatarUrl');
     }
   }
@@ -97,12 +99,18 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
   Future<void> _saveProfile() async {
     try {
       final userService = ref.read(supabaseUserServiceProvider);
-      
+
       await userService.updateUserProfile(
         name: _nameController.text.trim(),
-        phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
-        location: _locationController.text.trim().isEmpty ? null : _locationController.text.trim(),
-        bio: _bioController.text.trim().isEmpty ? null : _bioController.text.trim(),
+        phone: _phoneController.text.trim().isEmpty
+            ? null
+            : _phoneController.text.trim(),
+        location: _locationController.text.trim().isEmpty
+            ? null
+            : _locationController.text.trim(),
+        bio: _bioController.text.trim().isEmpty
+            ? null
+            : _bioController.text.trim(),
         avatarUrl: _avatarUrl,
         themeMode: _darkMode ? 'dark' : 'light',
         notificationsEnabled: _notifications,
@@ -119,7 +127,7 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        
+
         // Reload profile data to ensure fresh state
         await _loadProfileData();
       }
@@ -139,7 +147,7 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
     try {
       final userService = ref.read(supabaseUserServiceProvider);
       await userService.signOut();
-      
+
       // Navigation will be handled by auth wrapper
     } catch (e) {
       if (mounted) {
@@ -192,17 +200,20 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
                   CircleAvatar(
                     radius: 60,
                     backgroundColor: Colors.blue.shade100,
-                    backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
-                        ? NetworkImage(
-                            _avatarUrl!,
-                            headers: {'Cache-Control': 'no-cache'},
-                            errorBuilder: (context, error, stackTrace) {
-                              return Icon(Icons.person, size: 60, color: Colors.blue.shade600);
-                            },
-                          )
-                        : null,
+                    backgroundImage:
+                        _avatarUrl != null && _avatarUrl!.isNotEmpty
+                            ? NetworkImage(
+                                _avatarUrl!,
+                                headers: {'Cache-Control': 'no-cache'},
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Icon(Icons.person,
+                                      size: 60, color: Colors.blue.shade600);
+                                },
+                              )
+                            : null,
                     child: (_avatarUrl == null || _avatarUrl!.isEmpty)
-                        ? Icon(Icons.person, size: 60, color: Colors.blue.shade600)
+                        ? Icon(Icons.person,
+                            size: 60, color: Colors.blue.shade600)
                         : null,
                     key: ValueKey('avatar_${_avatarUrl ?? 'default'}'),
                   ),
@@ -210,48 +221,62 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
                   Text(
                     _nameController.text,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   Text(
                     _emailController.text,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey.shade600,
-                    ),
+                          color: Colors.grey.shade600,
+                        ),
                   ),
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 32),
-            
+
             // Task Statistics
             taskStatsAsync.when(
-              data: (stats) => Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Task Statistics',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
+              data: (statsMap) {
+                // Convert Map to TaskStats
+                final stats = TaskStats(
+                  total: statsMap['total'] ?? 0,
+                  completed: statsMap['completed'] ?? 0,
+                  pending: statsMap['pending'] ?? 0,
+                  highPriority: statsMap['high_priority'] ?? 0,
+                );
+
+                return Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Task Statistics',
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildStatItem('Total', stats.total.toString(), Colors.blue),
-                          _buildStatItem('Done', stats.completed.toString(), Colors.green),
-                          _buildStatItem('Pending', stats.pending.toString(), Colors.orange),
-                        ],
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _buildStatItem(
+                                'Total', stats.total.toString(), Colors.blue),
+                            _buildStatItem('Done', stats.completed.toString(),
+                                Colors.green),
+                            _buildStatItem('Pending', stats.pending.toString(),
+                                Colors.orange),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
               loading: () => const Card(
                 child: Padding(
                   padding: EdgeInsets.all(16),
@@ -265,9 +290,9 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Profile Information
             Card(
               child: Padding(
@@ -278,22 +303,26 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
                     Text(
                       'Profile Information',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                     const SizedBox(height: 16),
                     _buildEditableField('Name', _nameController, Icons.person),
-                    _buildEditableField('Email', _emailController, Icons.email, enabled: false),
+                    _buildEditableField('Email', _emailController, Icons.email,
+                        enabled: false),
                     _buildEditableField('Phone', _phoneController, Icons.phone),
-                    _buildEditableField('Location', _locationController, Icons.location_on),
-                    _buildEditableField('Bio', _bioController, Icons.info_outline, maxLines: 3),
+                    _buildEditableField(
+                        'Location', _locationController, Icons.location_on),
+                    _buildEditableField(
+                        'Bio', _bioController, Icons.info_outline,
+                        maxLines: 3),
                   ],
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Settings
             Card(
               child: Padding(
@@ -304,34 +333,40 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
                     Text(
                       'Settings',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                     const SizedBox(height: 16),
                     SwitchListTile(
                       title: const Text('Dark Mode'),
                       subtitle: const Text('Toggle dark theme'),
                       value: _darkMode,
-                      onChanged: _isEditing ? (value) {
-                        setState(() {
-                          _darkMode = value;
-                        });
-                      } : null,
+                      onChanged: _isEditing
+                          ? (value) {
+                              setState(() {
+                                _darkMode = value;
+                              });
+                            }
+                          : null,
                     ),
                     SwitchListTile(
                       title: const Text('Notifications'),
                       subtitle: const Text('Task reminders and updates'),
                       value: _notifications,
-                      onChanged: _isEditing ? (value) {
-                        setState(() {
-                          _notifications = value;
-                        });
-                      } : null,
+                      onChanged: _isEditing
+                          ? (value) {
+                              setState(() {
+                                _notifications = value;
+                              });
+                            }
+                          : null,
                     ),
                     ListTile(
-                      leading: Icon(Icons.security, color: Colors.blue.shade600),
+                      leading:
+                          Icon(Icons.security, color: Colors.blue.shade600),
                       title: const Text('Security Settings'),
-                      subtitle: const Text('Manage password and authentication'),
+                      subtitle:
+                          const Text('Manage password and authentication'),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => context.go('/security'),
                     ),
@@ -339,9 +374,9 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             // Logout Button
             SizedBox(
               width: double.infinity,
@@ -385,8 +420,8 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
   }
 
   Widget _buildEditableField(
-    String label, 
-    TextEditingController controller, 
+    String label,
+    TextEditingController controller,
     IconData icon, {
     bool enabled = true,
     int maxLines = 1,
@@ -403,9 +438,9 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
               Text(
                 label,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w500,
-                ),
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
               ),
             ],
           ),
@@ -427,14 +462,15 @@ class _SupabaseProfileScreenState extends ConsumerState<SupabaseProfileScreen> {
                       borderRadius: BorderRadius.circular(8),
                       borderSide: const BorderSide(color: Colors.blue),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   ),
                 )
               : Text(
                   controller.text,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
+                        fontWeight: FontWeight.w500,
+                      ),
                 ),
         ],
       ),
